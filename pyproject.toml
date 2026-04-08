@@ -1,0 +1,32 @@
+[project]
+name = "vkr-pointcloud-suite"
+version = "0.1.0"
+description = "Unified UV environment for synthetic factory point-cloud pipeline and lesson5 UI apps."
+requires-python = ">=3.12"
+dependencies = [
+  "synthetic-factory",
+  "pyyaml>=6.0",
+  "torch",
+  "pytorch-lightning",
+  "tensorboard",
+  "torchmetrics",
+  "omegaconf",
+  "numpy",
+  "pandas",
+  "streamlit",
+  "plotly",
+  "matplotlib",
+  "fire",
+  "scipy",
+  "scikit-learn",
+  "open3d",
+  "shapely",
+  "pulp",
+  "networkx",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+synthetic-factory = { path = "synthetic_factory", editable = true }

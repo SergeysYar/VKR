@@ -1,0 +1,36 @@
+# Python / virtual env
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE / OS
+.idea/
+.DS_Store
+
+# Nested standalone repositories (kept external)
+synthetic_factory/
+laserSensing/
+Surface-reconstructore/
+
+# Generated artifacts from lesson5
+lesson5/3011/
+lesson5/factory_demo_runs/
+lesson5/reconstruction/
+lesson5/reconstruction_results/
+lesson5/results/
+lesson5/outputs/
+lesson5/logs/
+lesson5/checkpoints/
+lesson5/tb_logs/
+lesson5/segmentation_error_maps/
+lesson5/visualization/
+lesson5/__pycache__/
+lesson5/engineering_classifier/__pycache__/
+
+# Large/generated files
+lesson5/*.ply
+lesson5/*.png
+lesson5/*.csv
