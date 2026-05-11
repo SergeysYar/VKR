@@ -1,0 +1,57 @@
+{
+  "paths": {
+    "input_obj": "out/factory.obj",
+    "output_dir": "../out/pointcloud_scans_fast",
+    "metadata_filename": "scan_dataset_fast.json",
+    "stitched_filename": "factory_stitched_fast.ply",
+    "circle_file_prefix": "scan_circle_fast"
+  },
+  "output": {
+    "date_folder_enabled": true,
+    "run_folder_enabled": true,
+    "unique_outputs": true,
+    "export_individual_circles": true,
+    "export_stitched_cloud": true,
+    "export_metadata_json": true
+  },
+  "lidar": {
+    "factory_room_id": "__factory__",
+    "include_factory_room": true,
+    "scan_range": 20.0,
+    "angular_resolution_deg": 1.2,
+    "vertical_resolution_deg": 1.6,
+    "vertical_fov_up_deg": 88.0,
+    "vertical_fov_down_deg": 88.0,
+    "sensor_height": 1.6,
+    "min_range": 0.35,
+    "point_multiplier": 12,
+    "point_jitter": 0.01,
+    "exterior_point_density_factor": 0.25,
+    "points_per_station": 0,
+    "blind_spot_radius": 0.55,
+    "ensure_blind_spot_coverage": true,
+    "stitched_fill_blind_spots": true,
+    "global_coverage": false,
+    "station_spacing": 5.0,
+    "station_margin": 1.0,
+    "obstacle_clearance": 0.4,
+    "include_structural": true,
+    "max_stations_per_room": 32,
+    "max_stations": 48,
+    "label_classes": {
+      "unknown": 0,
+      "pipe": 1,
+      "wire": 2,
+      "wall": 3,
+      "floor": 4,
+      "ceiling": 5,
+      "machine": 6,
+      "desk": 7,
+      "rack": 8,
+      "boiler": 9,
+      "conveyor": 10,
+      "structure": 11,
+      "infrastructure": 12
+    }
+  }
+}

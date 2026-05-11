@@ -1,0 +1,30 @@
+.venv/
+.uv-cache/
+__pycache__/
+.pytest_cache/
+pytest-cache-files-*/
+.cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.log
+
+# Build and generated outputs
+out/
+tmp/
+dist/
+build/
+
+# IDE and local tooling
+.vscode/
+.idea/
+
+# Nested accidental repositories/backups
+/synthetic_factory/
+src/synthetic_factory/.git_nested_backup/

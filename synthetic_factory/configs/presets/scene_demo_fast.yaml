@@ -1,0 +1,188 @@
+factory:
+  width: 54.0
+  depth: 40.0
+
+layout:
+  strategy: grid
+  number_of_rooms: 9
+  room_count_range: [9, 9]
+  corridor_width: 2.4
+
+rooms:
+  min_size: 3.2
+  max_size: 6.4
+  height: 4.2
+  wall_thickness: 0.2
+
+noise:
+  seed: 42
+  octaves: 3
+  frequency: 1.0
+  persistence: 0.5
+  lacunarity: 2.0
+  sampling_scale: 0.09
+  full_occupancy: true
+  slot_multiplier: 1.6
+  threshold: 0.35
+  connectivity_bias: 0.8
+  min_distance: 4.5
+  aspect_strength: 0.3
+  room_margin_ratio: 0.9
+
+biomes:
+  enabled: true
+  ensure_all_types: true
+  unified_shell: true
+  shell_ceiling_mode: stepped
+  corridor_ceiling_mode: global_min_room
+  shell_wall_height_mode: ceiling
+  connector_spurs: true
+  allow_corridorless_links: true
+  corridorless_link_ratio: 0.12
+  inter_room_doors: true
+  door_height: 2.2
+  workshop_biome: workshop
+  workshop_area_ratio: 0.7
+  cycle_order:
+    - workshop
+    - office
+    - boiler
+    - refinery
+    - electrical
+    - maintenance
+    - laboratory
+    - control
+    - storage
+
+columns:
+  enabled: false
+
+beams:
+  enabled: false
+
+machinery:
+  enabled: true
+  conveyors_per_room: 2
+  machines_per_room: 3
+  auxiliary:
+    enabled: false
+  infrastructure:
+    enabled: true
+    tray_height: [2.5, 2.8]
+    tray_width: [0.2, 0.35]
+    density: [0.7, 1.0]
+    branch_frequency: [0.7, 1.0]
+    include_pipes: true
+    pipe_radius: 0.08
+    pipe_casing_enabled: true
+    tray_cable_bundle_enabled: true
+    supports:
+      spacing: [2.4, 3.0]
+
+exterior:
+  enabled: true
+  equipment_density: [0.6, 0.9]
+  roof:
+    type: [flat]
+  facade:
+    window_density: [0.15, 0.3]
+  services:
+    enabled: true
+    tray_height: 3.0
+    tray_width: 0.42
+    tray_offset: 0.9
+    support_spacing: 4.0
+    connectors_per_room: 1
+    pipe_biomes: [boiler, electrical, workshop, maintenance, laboratory]
+    wire_biomes: [office, control, electrical, laboratory, workshop, maintenance]
+
+site:
+  enabled: true
+  terrain:
+    size: [70.0, 70.0]
+    road_density: [0.6, 0.9]
+    height_noise:
+      enabled: false
+  parking:
+    enabled: false
+  fence:
+    enabled: false
+
+export:
+  format: obj
+  output_path: out/factory_demo_fast.obj
+  include_normals: true
+  group_objects: true
+  object_naming: hierarchical
+
+lidar:
+  enabled: true
+  output_path: out/factory_demo_fast_scans.json
+  output_dir: out/factory_demo_fast_scans
+  stitched_output_path: out/factory_demo_fast_scans/factory_stitched.ply
+  circle_file_prefix: scan_circle
+  export_individual_circles: true
+  export_stitched_cloud: true
+  export_metadata_json: true
+  date_folder_enabled: true
+  scan_range: 20.0
+  angular_resolution_deg: 2.5
+  vertical_resolution_deg: 2.8
+  vertical_fov_up_deg: 88.0
+  vertical_fov_down_deg: 88.0
+  sensor_height: 1.6
+  min_range: 0.35
+  point_multiplier: 3
+  point_jitter: 0.006
+  exterior_point_density_factor: 0.25
+  points_per_station: 45000
+  blind_spot_radius: 0.55
+  ensure_blind_spot_coverage: true
+  stitched_fill_blind_spots: true
+  global_coverage: false
+  factory_room_id: __factory__
+  include_factory_room: true
+  station_spacing: 5.2
+  station_margin: 0.8
+  obstacle_clearance: 0.3
+  include_structural: true
+  max_stations_per_room: 2
+  max_stations: 10
+  coverage_grid_step: 4.2
+  coverage_wall_step: 5.0
+  coverage_max_targets: 500
+  optimize_raycasts: true
+  raycast_cell_size: 1.8
+  raycast_march_step: 1.2
+  label_classes:
+    unknown: 0
+    pipe: 1
+    wire: 2
+    wall: 3
+    floor: 4
+    ceiling: 5
+    machine: 6
+    desk: 7
+    rack: 8
+    boiler: 9
+    conveyor: 10
+    structure: 11
+    infrastructure: 12
+    roof: 13
+    window: 14
+    door: 15
+    gate: 16
+    terrain: 17
+    facade: 18
+
+pipeline:
+  enable_parameter_sampling: false
+  enable_layout_generation: true
+  enable_room_generation: true
+  enable_scene_assembly: true
+  enable_export: true
+  strict_mode: true
+
+random:
+  seed: 42
+  deterministic: true

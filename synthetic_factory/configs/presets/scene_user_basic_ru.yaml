@@ -1,0 +1,86 @@
+# Базовый пользовательский конфиг Synthetic Factory.
+# Формат: YAML с комментариями на русском для быстрой настройки.
+# Рекомендуемый запуск:
+# uv run -m synthetic_factory --config configs/presets/scene_user_basic_ru.yaml --seed 42
+
+factory:
+  width: 100.0       # Общая ширина завода (метры).
+  depth: 80.0        # Общая глубина завода (метры).
+
+layout:
+  strategy: perlin   # Алгоритм планировки: perlin (более "живой") или grid (регулярная сетка).
+  number_of_rooms: 8 # Желаемое количество помещений (биомов).
+  room_count_range: [8, 8] # Диапазон для генерации числа комнат; [8, 8] = фиксировано 8.
+  corridor_width: 3.0 # Ширина коридоров между помещениями.
+
+rooms:
+  min_size: 5.0      # Минимальный размер комнаты (метры).
+  max_size: 16.0     # Максимальный размер комнаты (метры).
+  height: 5.5        # Базовая высота комнат.
+  wall_thickness: 0.2 # Толщина стен.
+
+biomes:
+  enabled: true            # Включить распределение функциональных биомов (boiler/control/...).
+  ensure_all_types: true   # Стараться включать все типы биомов в генерации.
+  workshop_biome: workshop # Какой биом считать главным производственным цехом.
+  workshop_area_ratio: 0.70 # Доля площади, отдаваемая под главный цех.
+  clustered_assignment: true # Группировать похожие помещения более логично.
+  height_grouping: true      # Группировать помещения схожей высоты рядом.
+  inter_room_doors: true     # Создавать двери между соседними помещениями.
+  industrial_size_bias: true # Индустриальные помещения делать крупнее офисных/служебных.
+
+columns:
+  enabled: true      # Добавлять колонны.
+  spacing: 6.0       # Шаг между колоннами.
+  radius: 0.30       # Радиус колонн.
+
+beams:
+  enabled: true      # Добавлять балки/фермы.
+  spacing: 6.0       # Шаг балок.
+  elevation: 5.2     # Высота расположения балок.
+
+machinery:
+  enabled: true
+  density: 0.07      # Общая плотность оборудования в помещениях.
+  conveyors_per_room: 4 # Среднее число конвейеров на помещение.
+  machines_per_room: 6  # Среднее число крупных машин на помещение.
+  auxiliary:
+    enabled: true
+    density: [1.0, 1.6] # Плотность вторичных деталей (клапаны, мелкие блоки и т.п.).
+    complexity: [2, 4]   # Сложность вторичных деталей.
+  infrastructure:
+    enabled: true
+    density: [1.0, 1.5]        # Плотность магистральной инфраструктуры (лотки/трубы).
+    branch_frequency: [0.8, 1.2] # Частота ответвлений.
+    include_pipes: true          # Добавлять трубы вместе с кабельными лотками.
+
+exterior:
+  enabled: true
+  equipment_density: [0.8, 1.2] # Плотность внешнего оборудования возле здания.
+
+site:
+  enabled: true
+  terrain_margin: 18.0 # Отступ территории вокруг здания.
+
+export:
+  output_path: out/factory_user_basic.obj # Куда сохранить итоговый OBJ сцены.
+
+lidar:
+  enabled: true
+  output_path: out/factory_user_basic_scans.json # JSON-метаданные LiDAR прогона.
+  output_dir: out/factory_user_basic_scans        # Папка с PLY-облаками.
+  stitched_output_path: out/factory_user_basic_scans/factory_stitched.ply # Путь итогового сшитого облака.
+  scan_range: 22.0          # Дальность сканирования от станции.
+  point_multiplier: 48      # Множитель плотности облака (больше = тяжелее).
+  points_per_station: 550000 # Лимит точек на одну станцию (0 = без лимита).
+  station_spacing: 3.8      # Шаг между станциями (меньше шаг = больше станций).
+  max_stations_per_room: 10 # Максимум станций в одной комнате (0 = без лимита).
+  max_stations: 30          # Глобальный максимум станций (0 = без лимита).
+  compute_backend: auto     # auto/cpu/cuda: вычисления LiDAR (cuda при наличии NVIDIA + torch CUDA).
+  blind_spot_radius: 0.55   # Радиус "пятна" под сканером.
+  ensure_blind_spot_coverage: true # Добавлять станции для перекрытия слепых зон.
+  exterior_point_density_factor: 0.25 # Наружные точки в 4 раза реже внутренних.
+
+random:
+  seed: 42           # Фиксирует воспроизводимость сцены.
+  deterministic: true

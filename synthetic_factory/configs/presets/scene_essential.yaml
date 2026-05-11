@@ -1,0 +1,98 @@
+# Essential preset: key parameters only.
+# If PyYAML is not installed, CLI will fallback to scene_essential.json.
+
+factory:
+  width: 130.0
+  depth: 95.0
+
+layout:
+  strategy: perlin
+  number_of_rooms: 10
+  room_count_range: [10, 10]
+  corridor_width: 3.2
+
+rooms:
+  min_size: 5.0
+  max_size: 18.0
+  height: 6.0
+
+biomes:
+  enabled: true
+  ensure_all_types: true
+  workshop_biome: workshop
+  workshop_area_ratio: 0.68
+  clustered_assignment: true
+  height_grouping: true
+  allow_corridorless_links: true
+  corridorless_link_ratio: 0.20
+  industrial_size_bias: true
+  cycle_order:
+    - workshop
+    - boiler
+    - refinery
+    - electrical
+    - maintenance
+    - laboratory
+    - control
+    - office
+    - storage
+
+columns:
+  enabled: true
+  spacing: 6.0
+  radius: 0.30
+
+beams:
+  enabled: true
+  spacing: 6.0
+  elevation: 5.8
+
+machinery:
+  enabled: true
+  density: 0.08
+  conveyors_per_room: 5
+  machines_per_room: 7
+  auxiliary:
+    enabled: true
+    density: [1.2, 1.8]
+    complexity: [3, 4]
+  infrastructure:
+    enabled: true
+    density: [1.3, 1.8]
+    branch_frequency: [1.0, 1.4]
+    parallel_channels: 2
+    include_pipes: true
+
+exterior:
+  enabled: true
+  equipment_density: [1.0, 1.4]
+
+site:
+  enabled: true
+
+export:
+  output_path: out/factory_essential.obj
+
+lidar:
+  enabled: true
+  output_path: out/factory_essential_scans.json
+  output_dir: out/factory_essential_scans
+  stitched_output_path: out/factory_essential_scans/factory_stitched.ply
+  export_individual_circles: true
+  export_stitched_cloud: true
+  export_metadata_json: true
+  scan_range: 24.0
+  point_multiplier: 64
+  points_per_station: 900000
+  station_spacing: 3.4
+  max_stations_per_room: 14
+  max_stations: 36
+  blind_spot_radius: 0.55
+  ensure_blind_spot_coverage: true
+  stitched_fill_blind_spots: true
+  exterior_point_density_factor: 0.25
+
+random:
+  seed: 42
+  deterministic: true
+

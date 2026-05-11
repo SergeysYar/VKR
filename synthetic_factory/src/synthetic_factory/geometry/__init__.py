@@ -1,0 +1,5 @@
+"""Geometry primitives for synthetic factory assets."""
+
+from .mesh import Mesh, compute_normals
+
+__all__ = ["Mesh", "compute_normals"]

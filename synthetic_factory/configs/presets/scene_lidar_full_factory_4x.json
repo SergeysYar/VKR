@@ -1,0 +1,1525 @@
+{
+  "factory": {
+    "name": "synthetic_factory",
+    "width": 60.0,
+    "depth": 45.0,
+    "height": 14.0,
+    "levels": 1,
+    "units": "meters",
+    "ground_elevation": 0.0,
+    "safety_clearance": 1.5
+  },
+  "layout": {
+    "strategy": "perlin",
+    "number_of_rooms": 8,
+    "room_count_range": [
+      8,
+      8
+    ],
+    "corridor_width": 2.4,
+    "boundary_margin": 2.0,
+    "snap_grid": 0.5,
+    "allow_irregular_rooms": false
+  },
+  "noise": {
+    "seed": 42,
+    "octaves": 4,
+    "frequency": 1.0,
+    "persistence": 0.5,
+    "lacunarity": 2.0,
+    "sampling_scale": 0.082,
+    "full_occupancy": true,
+    "slot_multiplier": 2.8,
+    "threshold": 0.32,
+    "connectivity_bias": 0.9,
+    "min_distance": 8.0,
+    "aspect_strength": 0.35,
+    "room_margin_ratio": 0.92
+  },
+  "rooms": {
+    "min_size": 4.5,
+    "max_size": 10.0,
+    "height": 7.2,
+    "wall_thickness": 0.2,
+    "door_count": 1,
+    "window_count": 2,
+    "size_distribution": "uniform",
+    "zoning": {
+      "production_ratio": 0.65,
+      "storage_ratio": 0.2,
+      "service_ratio": 0.1,
+      "office_ratio": 0.05
+    }
+  },
+  "biomes": {
+    "enabled": true,
+    "ensure_all_types": true,
+    "unified_shell": true,
+    "shell_ceiling_mode": "stepped",
+    "corridor_ceiling_mode": "global_min_room",
+    "shell_wall_height_mode": "ceiling",
+    "connector_spurs": true,
+    "connector_span": 2.4,
+    "allow_corridorless_links": true,
+    "corridorless_link_ratio": 0.24,
+    "corridorless_height_delta": 1.4,
+    "shell_wall_thickness": 0.22,
+    "workshop_biome": "workshop",
+    "workshop_area_ratio": 0.75,
+    "clustered_assignment": true,
+    "height_grouping": true,
+    "height_group_axis": "auto",
+    "height_group_high_first": false,
+    "inter_room_doors": true,
+    "door_height": 2.3,
+    "industrial_size_bias": true,
+    "industrial_biomes": [
+      "workshop",
+      "refinery",
+      "boiler",
+      "storage",
+      "electrical",
+      "maintenance",
+      "laboratory"
+    ],
+    "industrial_size_multiplier": 1.42,
+    "non_industrial_size_multiplier": 0.52,
+    "industrial_min_size_ratio": 0.78,
+    "industrial_max_size_ratio": 0.99,
+    "non_industrial_min_size_ratio": 0.28,
+    "non_industrial_max_size_ratio": 0.58,
+    "cycle_order": [
+      "workshop",
+      "boiler",
+      "refinery",
+      "electrical",
+      "maintenance",
+      "laboratory",
+      "control",
+      "office",
+      "storage"
+    ],
+    "profiles": {
+      "workshop": {
+        "height_multiplier": 1.25,
+        "size_multiplier": 1.22,
+        "min_height": 6.0,
+        "max_height": 12.0,
+        "door_count": 2,
+        "window_count": 2
+      },
+      "office": {
+        "height_multiplier": 0.85,
+        "size_multiplier": 0.82,
+        "min_height": 2.8,
+        "max_height": 4.2,
+        "door_count": 1,
+        "window_count": 4
+      },
+      "refinery": {
+        "height_multiplier": 1.6,
+        "size_multiplier": 1.28,
+        "min_height": 12.0,
+        "max_height": 20.0,
+        "door_count": 1,
+        "window_count": 0
+      },
+      "boiler": {
+        "height_multiplier": 1.5,
+        "size_multiplier": 1.15,
+        "min_height": 10.0,
+        "door_count": 1,
+        "window_count": 1
+      },
+      "storage": {
+        "height_multiplier": 1.0,
+        "size_multiplier": 1.05,
+        "min_height": 4.0,
+        "max_height": 8.0,
+        "door_count": 2,
+        "window_count": 1
+      },
+      "electrical": {
+        "height_multiplier": 0.9,
+        "size_multiplier": 0.95,
+        "min_height": 3.2,
+        "max_height": 5.2,
+        "door_count": 1,
+        "window_count": 0
+      },
+      "maintenance": {
+        "height_multiplier": 0.95,
+        "size_multiplier": 0.9,
+        "min_height": 3.4,
+        "max_height": 6.0,
+        "door_count": 1,
+        "window_count": 1
+      },
+      "laboratory": {
+        "height_multiplier": 0.9,
+        "size_multiplier": 1.0,
+        "min_height": 3.0,
+        "max_height": 5.0,
+        "door_count": 1,
+        "window_count": 2
+      },
+      "control": {
+        "height_multiplier": 0.85,
+        "size_multiplier": 0.78,
+        "min_height": 2.8,
+        "max_height": 4.2,
+        "door_count": 1,
+        "window_count": 2
+      }
+    }
+  },
+  "walls": {
+    "thickness": 0.2,
+    "material": "concrete",
+    "fire_rating": "REI120",
+    "insulation": {
+      "enabled": true,
+      "type": "mineral_wool",
+      "thickness": 0.08
+    },
+    "finish": {
+      "inner": "paint",
+      "outer": "plaster"
+    }
+  },
+  "exterior": {
+    "enabled": true,
+    "group_id": "exterior",
+    "seed": 0,
+    "building": {
+      "margin": [
+        2.0,
+        4.0
+      ],
+      "height_variation": [
+        0.8,
+        2.4
+      ]
+    },
+    "equipment_density": [
+      1.4,
+      2.0
+    ],
+    "wall_thickness": 0.34,
+    "wall_offset": 0.12,
+    "wall_headroom": 0.25,
+    "roof_thickness": 0.3,
+    "roof_overhang": 0.55,
+    "roof_lift": 0.0,
+    "roof": {
+      "type": [
+        "sawtooth"
+      ],
+      "ridge_axis": "x",
+      "gabled_rise": 1.8,
+      "sawtooth_axis": "x",
+      "sawtooth_rise": 1.5,
+      "tooth_count": "auto",
+      "tooth_width": 8.0,
+      "clerestory_ratio": 0.28
+    },
+    "foundation_thickness": 0.45,
+    "foundation_border": 1.0,
+    "apron_width": 2.2,
+    "apron_thickness": 0.08,
+    "parapet": {
+      "enabled": true,
+      "height": 0.9,
+      "thickness": 0.24
+    },
+    "gates": {
+      "enabled": true,
+      "side": "south",
+      "count": "auto",
+      "width": 3.8,
+      "height": 4.2,
+      "depth": 0.22,
+      "edge_margin": 2.2,
+      "gap": 1.6
+    },
+    "opening_clearance": 0.18,
+    "door_width": 1.25,
+    "facade": {
+      "section_width": 4.0,
+      "panel_width": 4.2,
+      "panel_thickness": 0.08,
+      "panel_reveal": 0.05,
+      "section_every": 3,
+      "seam_width": 0.12,
+      "min_panel_height": 2.6,
+      "window_density": [
+        0.0,
+        0.5
+      ],
+      "functional": {
+        "enabled": true,
+        "min_gate_segment": 4.8
+      },
+      "windows": {
+        "width": 1.55,
+        "height": 1.35,
+        "thickness": 0.06,
+        "sill_height": 1.3,
+        "spacing": 1.8
+      },
+      "doors": {
+        "leaf_depth": 0.08
+      },
+      "gates": {
+        "leaf_depth": 0.1
+      },
+      "gate_frame": {
+        "thickness": 0.16,
+        "depth": 0.2,
+        "gap_from_wall": 0.04
+      }
+    },
+    "canopies": {
+      "enabled": true,
+      "depth": 2.4,
+      "thickness": 0.14,
+      "width_factor": 1.25,
+      "z_offset": 0.25
+    },
+    "ventilation": {
+      "enabled": true,
+      "count": "auto",
+      "count_per_1000m2": 3.0,
+      "shaft_width": 0.85,
+      "shaft_depth": 0.85,
+      "shaft_height": 1.6,
+      "edge_margin": 2.4
+    },
+    "roof_pipes": {
+      "enabled": true,
+      "radius": 0.24,
+      "height": 2.4,
+      "per_boiler_room": 2
+    },
+    "roof_units": {
+      "enabled": true,
+      "count_per_1000m2": 2.0,
+      "width": 1.8,
+      "depth": 1.4,
+      "height": 1.0,
+      "edge_margin": 2.8
+    },
+    "biome_links": {
+      "enabled": true,
+      "boiler": {
+        "pipe_radius": 0.24,
+        "pipe_length": 2.8,
+        "pipes_per_room": "auto",
+        "chimney_radius": 0.34,
+        "chimney_height": 7.0
+      },
+      "electrical": {
+        "transformers_per_room": "auto",
+        "transformer_width": 2.4,
+        "transformer_depth": 1.8,
+        "transformer_height": 2.2,
+        "cable_height": 2.4,
+        "cable_thickness": 0.14
+      },
+      "maintenance": {
+        "pad_depth": 5.2,
+        "pad_thickness": 0.08
+      },
+      "laboratory": {
+        "vent_radius": 0.22,
+        "vent_height": 1.6,
+        "block_width": 1.1,
+        "block_depth": 0.9,
+        "block_height": 0.72
+      }
+    },
+    "services": {
+      "enabled": true,
+      "tray_height": 3.2,
+      "tray_width": 0.45,
+      "tray_thickness": 0.12,
+      "tray_offset": 1.0,
+      "support_spacing": 3.0,
+      "support_width": 0.12,
+      "support_depth": 0.12,
+      "corner_margin": 1.4,
+      "cable_height": 3.3,
+      "cable_thickness": 0.09,
+      "pipe_height": 3.7,
+      "pipe_radius": 0.14,
+      "pipe_casing_thickness": 0.34,
+      "connectors_per_room": "auto",
+      "pipe_biomes": [
+        "boiler",
+        "refinery",
+        "workshop",
+        "maintenance",
+        "laboratory",
+        "storage",
+        "electrical"
+      ],
+      "wire_biomes": [
+        "office",
+        "control",
+        "electrical",
+        "laboratory",
+        "maintenance",
+        "workshop",
+        "storage",
+        "refinery",
+        "boiler"
+      ]
+    },
+    "rules": {
+      "enabled": true,
+      "auto_fix": true,
+      "shell_margin": 0.05,
+      "collision_padding": 0.06,
+      "collision_step": 0.45,
+      "min_entrances": 1,
+      "access_clearance": 1.6,
+      "pipe_tolerance": 0.35,
+      "pipe_link_thickness": 0.18,
+      "ground_tolerance": 0.03,
+      "ground_contact_types": [
+        "exterior_transformer",
+        "exterior_repair_pad",
+        "exterior_door",
+        "exterior_gate"
+      ]
+    }
+  },
+  "site": {
+    "enabled": true,
+    "group_id": "site",
+    "seed": 0,
+    "terrain_margin": 22.0,
+    "terrain": {
+      "thickness": 0.24,
+      "size": [
+        180.0,
+        260.0
+      ],
+      "road_density": [
+        1.0,
+        2.0
+      ],
+      "height_noise": {
+        "enabled": true,
+        "amplitude": 0.06,
+        "cells_x": 10,
+        "cells_y": 8,
+        "patch_thickness": 0.1
+      }
+    },
+    "road": {
+      "enabled": true,
+      "width": 6.0,
+      "thickness": 0.12,
+      "offset_from_building": 5.5,
+      "connect_to_building": true,
+      "connect_gates": true,
+      "connect_doors": true,
+      "connector_width": 4.2,
+      "min_connector_spacing": 2.8
+    },
+    "parking": {
+      "enabled": false,
+      "side": "north",
+      "width": 26.0,
+      "depth": 15.0,
+      "thickness": 0.08,
+      "offset_from_road": 2.4,
+      "slots": {
+        "width": 2.6,
+        "depth": 5.2,
+        "aisle": 6.0,
+        "line_width": 0.08,
+        "line_height": 0.02
+      }
+    },
+    "zones": {
+      "enabled": true,
+      "thickness": 0.07,
+      "margin": 1.1,
+      "min_size": 2.2
+    },
+    "logistics": {
+      "enabled": true,
+      "dock_count": "auto",
+      "dock_width": 4.8,
+      "dock_depth": 2.4,
+      "dock_height": 1.2,
+      "dock_gap": 1.6,
+      "edge_margin": 2.8
+    },
+    "fence": {
+      "enabled": true,
+      "inset": 2.0,
+      "height": 2.6,
+      "thickness": 0.16,
+      "post_spacing": 6.0,
+      "post_size": 0.18
+    },
+    "industrial": {
+      "enabled": true,
+      "tanks": {
+        "count": 8,
+        "radius": 1.5,
+        "height": 4.2,
+        "side_offset": 8.0,
+        "span_margin": 4.0,
+        "pipe_thickness": 0.22
+      },
+      "transformers": {
+        "count": 4,
+        "width": 2.5,
+        "depth": 2.0,
+        "height": 2.4,
+        "side_offset": 8.5
+      }
+    }
+  },
+  "columns": {
+    "enabled": true,
+    "spacing": 5.5,
+    "radius": 0.34,
+    "edge_offset": 1.0,
+    "height": 6.0,
+    "count_x": 0,
+    "count_y": 0
+  },
+  "beams": {
+    "enabled": true,
+    "spacing": 5.0,
+    "elevation": 6.4,
+    "profile": {
+      "type": "i",
+      "width": 0.3,
+      "height": 0.45,
+      "web_thickness": 0.02,
+      "flange_thickness": 0.03
+    }
+  },
+  "floors": {
+    "thickness": 0.25,
+    "material": "reinforced_concrete",
+    "load_capacity_kpa": 15.0,
+    "finish": "epoxy"
+  },
+  "openings": {
+    "door": {
+      "width": 1.2,
+      "height": 2.4,
+      "sill_height": 0.0,
+      "lintel_height": 2.6
+    },
+    "window": {
+      "width": 1.6,
+      "height": 1.4,
+      "sill_height": 1.0
+    }
+  },
+  "machinery": {
+    "enabled": true,
+    "auxiliary": {
+      "enabled": true,
+      "seed": 0,
+      "random_variation": true,
+      "density": [
+        2.0,
+        2.6
+      ],
+      "complexity": [
+        4,
+        5
+      ],
+      "max_children_per_object": 4,
+      "margin": 0.02,
+      "allow_above_ratio": 0.24,
+      "boiler": {
+        "bunker_probability": [
+          0.2,
+          0.8
+        ],
+        "pump_count": [
+          1,
+          4
+        ]
+      },
+      "electrical": {
+        "transformer_probability": [
+          0.3,
+          0.7
+        ]
+      },
+      "laboratory": {
+        "clutter_level": [
+          0.5,
+          2.0
+        ]
+      }
+    },
+    "infrastructure": {
+      "enabled": true,
+      "group_id": "global_infrastructure",
+      "biome_type": "auto",
+      "biome_profiles": {
+        "boiler": {
+          "include_pipes": true,
+          "pipe_radius_scale": 1.75,
+          "branch_count_scale": 1.8,
+          "branch_ratio_scale": 1.2,
+          "extra_pipe_lines": 2
+        },
+        "electrical": {
+          "include_pipes": true,
+          "tray_width_scale": 1.2,
+          "room_link_width_scale": 1.25,
+          "branch_count_scale": 2.0,
+          "strict_linearity": true
+        },
+        "control": {
+          "include_pipes": true,
+          "tray_width_scale": 0.72,
+          "room_link_width_scale": 0.68,
+          "branch_count_scale": 0.55,
+          "hidden_layout": true
+        },
+        "laboratory": {
+          "include_pipes": true,
+          "pipe_radius_scale": 0.65,
+          "room_link_width_scale": 0.85,
+          "multi_target_connections": true,
+          "max_targets": 6
+        },
+        "maintenance": {
+          "include_pipes": true,
+          "branch_count_scale": 0.85,
+          "hanging_cables": 3,
+          "hanging_ratio": 0.46
+        }
+      },
+      "routing_level": "ceiling",
+      "ceiling_offset": 0.25,
+      "tray_height": [
+        2.5,
+        4.0
+      ],
+      "tray_width": [
+        0.2,
+        1.0
+      ],
+      "tray_thickness": 0.12,
+      "room_link_width": 0.28,
+      "density": [
+        2.2,
+        2.8
+      ],
+      "branch_frequency": [
+        1.8,
+        2.2
+      ],
+      "vertical": {
+        "drop_frequency": [
+          1.1,
+          1.5
+        ]
+      },
+      "supports": {
+        "spacing": [
+          1.2,
+          2.0
+        ]
+      },
+      "parallel_channels": 3,
+      "channel_spacing": 4.0,
+      "cross_connections": true,
+      "cross_spacing": 12.0,
+      "junction_size": 0.28,
+      "backbone_margin": 1.0,
+      "wall_clearance": 0.25,
+      "min_segment_length": 0.25,
+      "include_pipes": true,
+      "pipe_radius": 0.09,
+      "pipe_drop": 0.28,
+      "pipe_casing_enabled": true,
+      "pipe_casing_thickness": 0.02,
+      "pipe_casing_scale": 1.22,
+      "tray_cable_bundle_enabled": true,
+      "tray_cable_bundle_count": 2,
+      "tray_cable_bundle_radius": 0.022,
+      "tray_cable_bundle_max_offset": 0.08,
+      "support_spacing": 2.0,
+      "support_radius": 0.06,
+      "drop_clearance": 0.25,
+      "min_vertical_drop_length": 0.35,
+      "secondary_branches": true,
+      "secondary_branch_count": 2,
+      "secondary_branch_ratio": 0.32,
+      "top_clearance": 0.35,
+      "rules": {
+        "auto_fix": true,
+        "clearance": 0.25,
+        "min_height": 0.35,
+        "top_margin": 0.2,
+        "require_vertical_drop": true,
+        "support_spacing": 2.0,
+        "long_segment_length": 2.4,
+        "support_tolerance": 0.22,
+        "collision_spacing": 0.16,
+        "collision_padding": 0.03
+      },
+      "object_connections": {
+        "enabled": true,
+        "clearance": 0.16,
+        "cable_radius": 0.03,
+        "pipe_connection_radius": 0.1,
+        "max_targets_per_room": 256
+      }
+    },
+    "density": 0.1,
+    "clearance": 1.2,
+    "types": [
+      "cnc",
+      "press",
+      "conveyor",
+      "robotic_cell"
+    ],
+    "power_line_height": 4.5,
+    "conveyors_per_room": 8,
+    "machines_per_room": 12,
+    "conveyor": {
+      "width": 0.8,
+      "height": 0.35,
+      "elevation": 0.4
+    },
+    "machine": {
+      "width": 2.2,
+      "depth": 1.4,
+      "height": 1.8
+    },
+    "boiler": {
+      "random_variation": true,
+      "pattern": "dense_industrial",
+      "rules": {
+        "auto_fix": true,
+        "min_clearance": 1.2
+      },
+      "min_walkway": 1.2,
+      "service_clearance": 0.8,
+      "edge_offset": 1.0,
+      "boiler": {
+        "count": [
+          2,
+          3
+        ],
+        "height": [
+          14.0,
+          24.0
+        ],
+        "radius": [
+          1.6,
+          2.8
+        ]
+      },
+      "pipes": {
+        "density": [
+          1.8,
+          2.4
+        ],
+        "radius": [
+          0.16,
+          0.52
+        ]
+      },
+      "platforms": {
+        "levels": [
+          1,
+          3
+        ],
+        "width_factor": [
+          1.2,
+          2.0
+        ],
+        "thickness": 0.18,
+        "ladder_width": 0.75
+      },
+      "tanks": {
+        "count": [
+          2,
+          6
+        ]
+      },
+      "structure": {
+        "ceiling_height": "auto",
+        "beam_density": [
+          0.9,
+          1.3
+        ],
+        "beam_offset": 1.6,
+        "support_beam_profile": {
+          "type": "i",
+          "width": 0.22,
+          "height": 0.32,
+          "web_thickness": 0.016,
+          "flange_thickness": 0.022
+        }
+      }
+    },
+    "refinery": {
+      "seed": 0,
+      "random_variation": true,
+      "pattern": "dense_refinery",
+      "walkway_width": 1.4,
+      "main_columns": {
+        "count": [
+          3,
+          5
+        ],
+        "height": [
+          24.0,
+          42.0
+        ],
+        "radius": [
+          1.4,
+          2.8
+        ]
+      },
+      "secondary": {
+        "count": [
+          10,
+          18
+        ],
+        "radius": [
+          0.5,
+          1.4
+        ],
+        "length": [
+          3.0,
+          7.0
+        ]
+      },
+      "pipes": {
+        "density": [
+          2.4,
+          4.2
+        ],
+        "radius": [
+          0.2,
+          0.75
+        ],
+        "levels": [
+          3,
+          5
+        ],
+        "support_spacing": [
+          2.5,
+          4.2
+        ]
+      },
+      "platforms": {
+        "levels": [
+          2,
+          5
+        ],
+        "width_factor": [
+          1.8,
+          2.8
+        ],
+        "guardrails": {
+          "enabled": false,
+          "height": 1.05,
+          "thickness": 0.08
+        }
+      },
+      "routing": {
+        "smooth_bends": true,
+        "corner_chamfer": 0.35,
+        "pump_length_threshold": 7.0,
+        "group_lane_spacing": 0.75
+      },
+      "secondary_elements": {
+        "enabled": true,
+        "density": 1.5,
+        "sensor_density": 1.6
+      },
+      "structure": {
+        "edge_offset": 1.0,
+        "min_clearance": 0.9
+      },
+      "rules": {
+        "auto_fix": true,
+        "min_clearance": 0.9,
+        "pipe_collision_margin": 0.12,
+        "pipe_vertical_step": 0.28,
+        "support_spacing": 3.2
+      }
+    },
+    "electrical": {
+      "seed": 0,
+      "random_variation": true,
+      "auto_fix": true,
+      "pattern": "dense_grid",
+      "rules": {
+        "clearance_front": 0.8,
+        "min_spacing": 0.3,
+        "enforce_cable_routing": true,
+        "strict_alignment": true,
+        "tray_height_clearance": 0.25,
+        "cooling_access_clearance": 0.7
+      },
+      "grid_snapping": true,
+      "fixed_grid_step": 0.2,
+      "orientation": "y+",
+      "room": {
+        "width": [
+          10.0,
+          50.0
+        ],
+        "depth": [
+          10.0,
+          60.0
+        ],
+        "height": [
+          3.0,
+          6.0
+        ]
+      },
+      "cabinets": {
+        "rows": [
+          3,
+          6
+        ],
+        "per_row": [
+          10,
+          20
+        ],
+        "spacing": [
+          0.8,
+          1.2
+        ]
+      },
+      "walkways": {
+        "width": [
+          0.8,
+          2.0
+        ],
+        "perimeter_width": 1.0
+      },
+      "cable_trays": {
+        "height": [
+          2.2,
+          3.5
+        ],
+        "density": [
+          1.8,
+          2.2
+        ]
+      },
+      "cables": {
+        "density": [
+          2.2,
+          3.0
+        ],
+        "optimize_bundles": true,
+        "variation": 0.0
+      },
+      "cooling": {
+        "units": [
+          2,
+          5
+        ]
+      },
+      "cabinet_width": 0.9,
+      "cabinet_depth": 0.6,
+      "cabinet_height": 2.2,
+      "cabinet_door_type": "double",
+      "row_step": 2.6,
+      "min_clearance": 0.3,
+      "access_depth": 0.8,
+      "tray_mode": "overhead",
+      "tray_width": 0.35,
+      "tray_height": 0.12,
+      "tray_support_spacing": 3.0,
+      "cross_tray_count": 2,
+      "cable_radius": 0.03,
+      "junction_mode": "walls",
+      "junction_count": 4,
+      "junction_box_size": 0.3,
+      "cooling_width": 0.9,
+      "cooling_height": 2.0,
+      "cooling_airflow_direction": "front_to_back"
+    },
+    "laboratory": {
+      "seed": 0,
+      "random_variation": true,
+      "pattern": "research_lab",
+      "auto_fix": true,
+      "room": {
+        "width": [
+          8.0,
+          30.0
+        ],
+        "depth": [
+          8.0,
+          30.0
+        ],
+        "height": [
+          2.5,
+          4.5
+        ]
+      },
+      "stations": {
+        "count": [
+          4,
+          14
+        ],
+        "spacing": [
+          1.4,
+          2.6
+        ],
+        "type_variability": [
+          0.15,
+          0.65
+        ]
+      },
+      "equipment": {
+        "density": [
+          2.0,
+          5.0
+        ]
+      },
+      "fumehood": {
+        "probability": [
+          0.0,
+          0.5
+        ]
+      },
+      "storage": {
+        "shelves": [
+          2,
+          12
+        ],
+        "cabinets": [
+          1,
+          10
+        ]
+      },
+      "infrastructure": {
+        "cable_density": [
+          1.0,
+          2.2
+        ],
+        "pipe_density": [
+          0.7,
+          1.4
+        ]
+      },
+      "lighting": {
+        "intensity": [
+          0.5,
+          2.0
+        ]
+      },
+      "density": 0.55,
+      "module_width": [
+        1.9,
+        2.8
+      ],
+      "module_depth": [
+        1.4,
+        2.2
+      ],
+      "equipment_per_station": [
+        1,
+        5
+      ],
+      "min_station_spacing": 0.95,
+      "walkway_width": 1.3,
+      "perimeter_walkway": 0.9,
+      "access_depth": 0.85,
+      "bench_height": 0.9,
+      "fumehood_probability": 0.32,
+      "sink_probability": 0.35,
+      "near_station_storage_probability": 0.34,
+      "cable_radius": 0.008,
+      "pipe_radius": 0.01,
+      "equipment_cable_mode": "mixed",
+      "equipment_types": [
+        "analyzer",
+        "mixer",
+        "centrifuge",
+        "pump",
+        "controller",
+        "heater"
+      ],
+      "equipment_type_map": {
+        "chemistry": [
+          "reactor",
+          "mixer",
+          "heater",
+          "pump"
+        ],
+        "analysis": [
+          "analyzer",
+          "spectrometer",
+          "chromatograph",
+          "sensor"
+        ],
+        "preparation": [
+          "balance",
+          "dispenser",
+          "stirrer",
+          "controller"
+        ]
+      },
+      "station_pipe_probability": 0.45,
+      "station_alignment_step": 0.04,
+      "rules": {
+        "auto_fix": true,
+        "min_spacing": 0.95,
+        "equipment_near_distance": 0.24,
+        "equipment_min_spacing": 0.16,
+        "safety_walkway_clearance": 0.06,
+        "edge_margin": 0.04
+      },
+      "light_grid_density": 1.0,
+      "light_size": 0.52,
+      "station_light_scale": 1.2,
+      "water_enabled": false,
+      "gas_enabled": false,
+      "station_type_weights": {
+        "chemistry": 0.34,
+        "analysis": 0.38,
+        "preparation": 0.28
+      }
+    },
+    "maintenance": {
+      "seed": 0,
+      "random_variation": true,
+      "pattern": "heavy_maintenance",
+      "density": [
+        1.2,
+        2.0
+      ],
+      "clutter": [
+        0.4,
+        1.25
+      ],
+      "organization": {
+        "order_level": [
+          0.0,
+          1.0
+        ]
+      },
+      "zones": {
+        "repair": [
+          1,
+          5
+        ],
+        "storage": [
+          1,
+          3
+        ]
+      },
+      "min_walkway_width": 1.2,
+      "edge_margin": 0.8,
+      "repair_zone_count": [
+        4,
+        10
+      ],
+      "storage_rack_count": [
+        2,
+        8
+      ],
+      "tools": {
+        "density": [
+          1.2,
+          3.0
+        ]
+      },
+      "parts": {
+        "loose_parts": [
+          12,
+          64
+        ],
+        "large_parts": [
+          3,
+          14
+        ]
+      },
+      "repair_scenario": {
+        "enabled": false,
+        "name": "repair",
+        "count": [
+          1,
+          2
+        ],
+        "subcomponents": [
+          3,
+          6
+        ],
+        "tools_per_target": [
+          1,
+          2
+        ],
+        "tool_size_scale": [
+          0.85,
+          1.15
+        ],
+        "disconnected_lines": true,
+        "cable_probability": [
+          0.75,
+          1.0
+        ],
+        "pipe_probability": [
+          0.55,
+          0.95
+        ],
+        "cable_length": [
+          0.6,
+          1.6
+        ],
+        "pipe_length": [
+          0.55,
+          1.4
+        ],
+        "cable_curvature": [
+          0.15,
+          0.72
+        ],
+        "pipe_curvature": [
+          0.08,
+          0.58
+        ]
+      },
+      "major_spacing_x": 2.2,
+      "major_row_spacing": 2.4,
+      "workbench": {
+        "count": [
+          1,
+          10
+        ],
+        "width": 1.8,
+        "depth": 0.9,
+        "height": 0.95
+      },
+      "tool_rack": {
+        "width": 1.0,
+        "depth": 0.55,
+        "height": 2.1
+      },
+      "rules": {
+        "min_clearance": 0.6,
+        "access_depth": 1.0,
+        "tool_max_distance": 2.2,
+        "floor_tolerance": 0.08,
+        "pallet_attach_tolerance": 0.12,
+        "crane_clearance_radius": 0.55
+      },
+      "crane": {
+        "enabled": true
+      }
+    },
+    "control": {
+      "seed": 0,
+      "random_variation": true,
+      "pattern": "high_density",
+      "auto_fix": true,
+      "density_profile": "medium",
+      "panel_layout": "auto",
+      "rack_layout": "walls",
+      "room": {
+        "width": [
+          10.0,
+          40.0
+        ],
+        "depth": [
+          8.0,
+          30.0
+        ],
+        "height": [
+          2.5,
+          5.0
+        ]
+      },
+      "desks": {
+        "rows": [
+          3,
+          6
+        ],
+        "cols": [
+          5,
+          12
+        ],
+        "spacing_x": [
+          1.2,
+          2.0
+        ],
+        "spacing_y": [
+          1.5,
+          3.0
+        ]
+      },
+      "monitors": {
+        "per_desk": [
+          2,
+          4
+        ]
+      },
+      "panels": {
+        "type": [
+          "flat",
+          "curved"
+        ],
+        "height": [
+          1.5,
+          3.0
+        ]
+      },
+      "racks": {
+        "count": [
+          3,
+          10
+        ]
+      },
+      "lighting": {
+        "grid_density": [
+          0.5,
+          2.0
+        ]
+      },
+      "wall_margin": 0.8,
+      "desk_width": 1.4,
+      "desk_depth": 0.8,
+      "desk_height": 0.92,
+      "seat_width": 0.55,
+      "seat_depth": 0.55,
+      "seat_height": 0.95,
+      "min_desk_clearance": 0.9,
+      "main_aisle_width": 1.35,
+      "side_aisle_width": 0.9,
+      "front_clearance": 1.0,
+      "panel_width": 1.5,
+      "panel_height": 1.6,
+      "panel_depth": 0.22,
+      "panel_zone_depth": 2.2,
+      "panel_tilt_angle": 24.0,
+      "monitor_width": 0.62,
+      "monitor_height": 0.36,
+      "monitor_thickness": 0.06,
+      "sight_corridor_width": 0.9,
+      "visibility_blocker_height": 1.1,
+      "monitor_view_angle_deg": 40.0,
+      "rack_width": 0.52,
+      "rack_depth": 0.48,
+      "rack_height": 1.45,
+      "cable_tray_height": 0.16,
+      "cable_tray_elevation_ratio": 0.82,
+      "ceiling_min": 2.8,
+      "ceiling_max": 4.2,
+      "ceiling_thickness": 0.06,
+      "zone_thickness": 0.02,
+      "alignment_grid_step": 0.1,
+      "ergonomic_desk_height_min": 0.72,
+      "ergonomic_desk_height_max": 1.15,
+      "ergonomic_seat_height_min": 0.38,
+      "ergonomic_seat_height_max": 0.58,
+      "ergonomic_monitor_center_min": 0.22,
+      "ergonomic_monitor_center_max": 0.65
+    }
+  },
+  "utilities": {
+    "lighting": {
+      "enabled": true,
+      "spacing": 4.0,
+      "mount_height": 5.8,
+      "intensity_lux": 500
+    },
+    "ventilation": {
+      "enabled": true,
+      "duct_height": 6.5,
+      "airflow_m3h": 25000
+    },
+    "sprinklers": {
+      "enabled": true,
+      "spacing": 3.0,
+      "line_offset": 0.5
+    }
+  },
+  "materials": {
+    "default_wall": "concrete",
+    "default_floor": "epoxy",
+    "default_column": "steel",
+    "default_beam": "steel"
+  },
+  "export": {
+    "format": "obj",
+    "output_path": "out/factory_lidar_full_factory_4x.obj",
+    "include_normals": true,
+    "group_objects": true,
+    "object_naming": "hierarchical"
+  },
+  "lidar": {
+    "enabled": true,
+    "output_path": "out/factory_lidar_full_factory_4x_scans.json",
+    "output_dir": "out/factory_lidar_full_factory_4x_scans",
+    "stitched_output_path": "out/factory_lidar_full_factory_4x_scans/factory_stitched.ply",
+    "circle_file_prefix": "scan_circle",
+    "export_individual_circles": true,
+    "export_stitched_cloud": true,
+    "export_metadata_json": true,
+    "retain_circle_records_in_context": false,
+    "memory_safe_mode": true,
+    "max_total_points_in_memory": 6000000,
+    "scan_range": 32.0,
+    "angular_resolution_deg": 0.35,
+    "vertical_resolution_deg": 0.45,
+    "compute_backend": "auto",
+    "cuda_ray_batch_size": 1536,
+    "cuda_object_batch_size": 1536,
+    "vertical_fov_up_deg": 88.0,
+    "vertical_fov_down_deg": 88.0,
+    "sensor_height": 1.6,
+    "min_range": 0.35,
+    "point_multiplier": 96,
+    "point_jitter": 0.0075,
+    "exterior_point_density_factor": 0.25,
+    "points_per_station": 30000,
+    "min_points_per_station": 12000,
+    "trim_station_count_for_memory": false,
+    "blind_spot_radius": 0.55,
+    "ensure_blind_spot_coverage": true,
+    "stitched_fill_blind_spots": true,
+    "global_coverage": true,
+    "factory_room_id": "__factory__",
+    "include_factory_room": true,
+    "station_spacing": 2.0,
+    "station_margin": 0.9,
+    "obstacle_clearance": 0.35,
+    "include_structural": true,
+    "max_stations_per_room": 0,
+    "max_stations": 0,
+    "label_classes": {
+      "unknown": 0,
+      "pipe": 1,
+      "wire": 2,
+      "wall": 3,
+      "floor": 4,
+      "ceiling": 5,
+      "machine": 6,
+      "desk": 7,
+      "rack": 8,
+      "boiler": 9,
+      "conveyor": 10,
+      "structure": 11,
+      "infrastructure": 12,
+      "roof": 13,
+      "window": 14,
+      "door": 15,
+      "gate": 16,
+      "terrain": 17,
+      "facade": 18
+    },
+    "coverage_grid_step": 1.8,
+    "coverage_wall_step": 2.3,
+    "coverage_max_targets": 3200,
+    "raycast_cell_size": 1.4,
+    "raycast_march_step": 0.9
+  },
+  "pipeline": {
+    "enable_parameter_sampling": false,
+    "enable_layout_generation": true,
+    "enable_room_generation": true,
+    "enable_scene_assembly": true,
+    "enable_export": true,
+    "strict_mode": true
+  },
+  "random": {
+    "seed": 42,
+    "deterministic": true,
+    "distribution_defaults": {
+      "size": "uniform",
+      "density": "normal"
+    }
+  },
+  "validation": {
+    "enforce_bounds": true,
+    "fail_on_overlap": true,
+    "min_walkway_width": 1.2,
+    "check_opening_collisions": true
+  },
+  "parameters": {
+    "factory_width": {
+      "value": 60.0,
+      "min": 60.0,
+      "max": 60.0,
+      "distribution": "uniform"
+    },
+    "factory_depth": {
+      "value": 45.0,
+      "min": 45.0,
+      "max": 45.0,
+      "distribution": "uniform"
+    },
+    "number_of_rooms": {
+      "value": 8,
+      "min": 8,
+      "max": 8,
+      "distribution": "uniform"
+    },
+    "corridor_width": {
+      "value": 2.4,
+      "min": 2.4,
+      "max": 2.4,
+      "distribution": "uniform"
+    },
+    "room_size_min": {
+      "value": 4.5,
+      "min": 4.5,
+      "max": 4.5,
+      "distribution": "uniform"
+    },
+    "room_size_max": {
+      "value": 10.0,
+      "min": 10.0,
+      "max": 10.0,
+      "distribution": "uniform"
+    },
+    "room_height": {
+      "value": 7.2,
+      "min": 7.2,
+      "max": 7.2,
+      "distribution": "uniform"
+    },
+    "wall_thickness": {
+      "value": 0.2,
+      "min": 0.2,
+      "max": 0.2,
+      "distribution": "uniform"
+    },
+    "column_spacing": {
+      "value": 5.5,
+      "min": 5.5,
+      "max": 5.5,
+      "distribution": "uniform"
+    },
+    "column_radius": {
+      "value": 0.34,
+      "min": 0.34,
+      "max": 0.34,
+      "distribution": "uniform"
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "author": "synthetic_factory",
+    "description": "Heavy preset for full-scale factory generation with 4x denser LiDAR clouds."
+  }
+}

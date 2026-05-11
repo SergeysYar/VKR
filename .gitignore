@@ -11,9 +11,21 @@ __pycache__/
 .DS_Store
 
 # Nested standalone repositories (kept external)
-synthetic_factory/
-laserSensing/
-Surface-reconstructore/
+/laserSensing/
+/Surface-reconstructore/
+
+# Synthetic factory source is tracked in this repo; ignore only generated/runtime artifacts.
+/synthetic_factory/.git/
+/synthetic_factory/.git_nested_backup/
+/synthetic_factory/synthetic_factory/
+/synthetic_factory/.venv/
+/synthetic_factory/.uv-cache/
+/synthetic_factory/out/
+/synthetic_factory/tmp/
+/synthetic_factory/pytest-cache-files-*/
+/synthetic_factory/src/synthetic_factory.egg-info/
+/synthetic_factory/**/__pycache__/
+/synthetic_factory/**/*.pyc
 
 # Generated artifacts from lesson5
 lesson5/3011/
