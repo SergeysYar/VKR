@@ -24,6 +24,8 @@ if str(SYNTHETIC_FACTORY_SRC) not in sys.path:
 
 _SYNTHETIC_IMPORT_ERROR: Exception | None = None
 try:
+    from synthetic_factory.exporters.obj_exporter import ObjExporter
+    from synthetic_factory.generators.biomes import BIOME_REGISTRY, DEFAULT_BIOME_ORDER
     from synthetic_factory.generators.factory_generator import (
         FactoryGenerator,
         FactoryParams,
@@ -31,6 +33,9 @@ try:
     )
     from synthetic_factory.sensing.lidar_pipeline import LidarStation, LidarSurveyGenerator
 except Exception as synthetic_exc:  # pragma: no cover - runtime dependency issue
+    ObjExporter = None  # type: ignore[assignment]
+    BIOME_REGISTRY = None  # type: ignore[assignment]
+    DEFAULT_BIOME_ORDER = None  # type: ignore[assignment]
     FactoryGenerator = None  # type: ignore[assignment]
     FactoryParams = None  # type: ignore[assignment]
     RoomLayout = None  # type: ignore[assignment]
@@ -158,6 +163,7 @@ class FactoryCloudResult:
     room_index_lookup: dict[str, int]
     factory_cloud_path: str
     metadata_path: str
+    scene_obj_path: str = ""
 
 
 @dataclass
@@ -184,6 +190,64 @@ def _ensure_synthetic_factory_available() -> None:
             "synthetic_factory modules are unavailable. "
             "Install dependencies for synthetic_factory first."
         ) from _SYNTHETIC_IMPORT_ERROR
+
+
+def get_available_scene_biomes() -> list[str]:
+    fallback = [
+        "workshop",
+        "office",
+        "boiler",
+        "refinery",
+        "storage",
+        "electrical",
+        "maintenance",
+        "laboratory",
+        "control",
+    ]
+    registry_names: list[str] = []
+    if isinstance(BIOME_REGISTRY, dict):
+        registry_names = [str(name).strip().lower() for name in BIOME_REGISTRY.keys() if str(name).strip()]
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    if isinstance(DEFAULT_BIOME_ORDER, (list, tuple)):
+        for name in DEFAULT_BIOME_ORDER:
+            biome = str(name).strip().lower()
+            if biome and biome not in seen:
+                ordered.append(biome)
+                seen.add(biome)
+    for biome in registry_names:
+        if biome and biome not in seen:
+            ordered.append(biome)
+            seen.add(biome)
+    if not ordered:
+        return fallback
+    return ordered
+
+
+def _normalize_biome_selection(selected_biomes: Iterable[str] | None) -> list[str]:
+    if selected_biomes is None:
+        return []
+    allowed = set(get_available_scene_biomes())
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for name in selected_biomes:
+        biome = str(name).strip().lower()
+        if not biome or biome not in allowed or biome in seen:
+            continue
+        normalized.append(biome)
+        seen.add(biome)
+    return normalized
+
+
+def _resolve_biome_cycle(selected_biomes: Iterable[str] | None) -> tuple[list[str], bool]:
+    normalized = _normalize_biome_selection(selected_biomes)
+    if not normalized:
+        return get_available_scene_biomes(), True
+    cycle = list(normalized)
+    if "workshop" not in cycle:
+        cycle = ["workshop", *cycle]
+    return cycle, False
 
 
 def _numeric_sort_key(name: str) -> tuple[int, str]:
@@ -301,8 +365,12 @@ def _build_factory_scene(
     factory_depth: float,
     room_count: int,
     room_height: float,
+    selected_biomes: list[str] | None = None,
 ) -> tuple[Any, list[Any], Any]:
     _ensure_synthetic_factory_available()
+    cycle_order, ensure_all_types = _resolve_biome_cycle(selected_biomes)
+    biome_selection_active = bool(_normalize_biome_selection(selected_biomes))
+    workshop_area_ratio = 0.0 if biome_selection_active else 0.72
 
     params = FactoryParams(
         factory_width=float(factory_width),
@@ -329,10 +397,11 @@ def _build_factory_scene(
         },
         biomes={
             "enabled": True,
-            "ensure_all_types": True,
+            "ensure_all_types": ensure_all_types,
+            "cycle_order": cycle_order,
             "clustered_assignment": True,
             "height_grouping": True,
-            "workshop_area_ratio": 0.72,
+            "workshop_area_ratio": workshop_area_ratio,
         },
         columns={"enabled": True, "spacing": 6.0, "radius": 0.3, "height": room_height + 1.8},
         beams={"enabled": True, "spacing": 6.0, "elevation": room_height + 1.2},
@@ -734,8 +803,14 @@ def generate_factory_cloud(
     room_height: float = 6.0,
     lidar_density: float = 1.0,
     use_lasersensing: bool = False,
+    selected_biomes: list[str] | None = None,
 ) -> FactoryCloudResult:
     _ensure_synthetic_factory_available()
+    requested_biomes = _normalize_biome_selection(selected_biomes)
+    effective_biome_cycle, _ = _resolve_biome_cycle(selected_biomes)
+    notes: list[str] = []
+    if requested_biomes and "workshop" not in requested_biomes and "workshop" in effective_biome_cycle:
+        notes.append("Биом workshop добавлен автоматически как базовая техническая зона.")
 
     _, layout, scene = _build_factory_scene(
         seed=int(seed),
@@ -743,13 +818,13 @@ def generate_factory_cloud(
         factory_depth=factory_depth,
         room_count=room_count,
         room_height=room_height,
+        selected_biomes=selected_biomes,
     )
     rooms = _layout_to_rooms(layout, room_height=room_height)
     room_index_lookup = {room.room_id: index for index, room in enumerate(rooms)}
 
     lidar_settings = _default_lidar_settings(seed=seed, density_factor=lidar_density)
     lidar_generator = LidarSurveyGenerator(lidar_settings)
-    notes: list[str] = []
     stations = None
 
     if use_lasersensing:
@@ -791,6 +866,15 @@ def generate_factory_cloud(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    scene_obj_path = ""
+    if ObjExporter is not None:
+        try:
+            obj_path = output_dir / "industrial_scene.obj"
+            ObjExporter().export(scene, str(obj_path))
+            scene_obj_path = str(obj_path)
+        except Exception as obj_error:
+            notes.append(f"Не удалось экспортировать OBJ промышленной сцены: {obj_error}")
+
     factory_cloud_path = _write_factory_cloud_ply(
         output_dir / "factory_cloud.ply",
         factory_points,
@@ -801,6 +885,8 @@ def generate_factory_cloud(
         "run_id": run_id,
         "seed": int(seed),
         "lidar_density": float(lidar_density),
+        "requested_biomes": requested_biomes,
+        "effective_biome_cycle": effective_biome_cycle,
         "rooms": [
             {
                 "room_id": room.room_id,
@@ -819,6 +905,7 @@ def generate_factory_cloud(
             {"id": station.id, "room_id": station.room_id, "x": station.x, "y": station.y, "z": station.z}
             for station in stations
         ],
+        "scene_obj_path": scene_obj_path,
         "factory_cloud_path": factory_cloud_path,
         "notes": notes,
     }
@@ -837,6 +924,7 @@ def generate_factory_cloud(
         room_index_lookup=room_index_lookup,
         factory_cloud_path=factory_cloud_path,
         metadata_path=str(metadata_path),
+        scene_obj_path=scene_obj_path,
     )
 
 

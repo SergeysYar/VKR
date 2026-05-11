@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -12,6 +13,7 @@ from factory_showcase_pipeline import (
     RoomInfo,
     build_single_room_from_cloud,
     generate_factory_cloud,
+    get_available_scene_biomes,
     load_point_cloud_file,
     place_object_files_in_factory_cloud,
     save_combined_cloud_as,
@@ -74,6 +76,116 @@ def _build_cloud_figure(
         },
     )
     return fig
+
+
+def _load_obj_preview_mesh(
+    obj_path: str | Path,
+    *,
+    max_faces: int = 120000,
+) -> tuple[np.ndarray, np.ndarray]:
+    path = Path(obj_path)
+    if not path.exists():
+        raise FileNotFoundError(f"OBJ не найден: {path}")
+
+    vertices: list[tuple[float, float, float]] = []
+    faces: list[tuple[int, int, int]] = []
+
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for line in handle:
+            if line.startswith("v "):
+                parts = line.strip().split()
+                if len(parts) < 4:
+                    continue
+                try:
+                    vertices.append((float(parts[1]), float(parts[2]), float(parts[3])))
+                except ValueError:
+                    continue
+                continue
+
+            if not line.startswith("f "):
+                continue
+
+            parts = line.strip().split()[1:]
+            if len(parts) < 3:
+                continue
+            indices: list[int] = []
+            for token in parts:
+                head = token.split("/", maxsplit=1)[0].strip()
+                if not head:
+                    continue
+                try:
+                    index = int(head)
+                except ValueError:
+                    continue
+                if index < 0:
+                    index = len(vertices) + index + 1
+                zero_based = index - 1
+                if zero_based >= 0:
+                    indices.append(zero_based)
+
+            if len(indices) < 3:
+                continue
+            base = indices[0]
+            for i in range(1, len(indices) - 1):
+                faces.append((base, indices[i], indices[i + 1]))
+
+    if not vertices or not faces:
+        raise ValueError("OBJ не содержит корректной геометрии для предпросмотра.")
+
+    vertices_np = np.asarray(vertices, dtype=np.float32)
+    faces_np = np.asarray(
+        [face for face in faces if max(face) < len(vertices_np)],
+        dtype=np.int32,
+    )
+    if len(faces_np) == 0:
+        raise ValueError("В OBJ не найдено валидных граней после проверки индексов.")
+
+    if max_faces > 0 and len(faces_np) > max_faces:
+        step = max(1, len(faces_np) // max_faces)
+        faces_np = faces_np[::step]
+
+    return vertices_np, faces_np
+
+
+def _build_obj_figure(
+    obj_path: str | Path,
+    *,
+    title: str,
+    max_faces: int = 120000,
+) -> tuple[go.Figure, int, int]:
+    vertices, faces = _load_obj_preview_mesh(obj_path, max_faces=max_faces)
+    fig = go.Figure(
+        data=[
+            go.Mesh3d(
+                x=vertices[:, 0],
+                y=vertices[:, 1],
+                z=vertices[:, 2],
+                i=faces[:, 0],
+                j=faces[:, 1],
+                k=faces[:, 2],
+                color="#9CAEC4",
+                flatshading=True,
+                opacity=0.95,
+                lighting={
+                    "ambient": 0.45,
+                    "diffuse": 0.9,
+                    "specular": 0.2,
+                    "roughness": 0.6,
+                },
+            )
+        ]
+    )
+    fig.update_layout(
+        title=title,
+        margin={"l": 0, "r": 0, "t": 40, "b": 0},
+        scene={
+            "xaxis_title": "X",
+            "yaxis_title": "Y",
+            "zaxis_title": "Z",
+            "aspectmode": "data",
+        },
+    )
+    return fig, int(len(vertices)), int(len(faces))
 
 
 def _ensure_state() -> None:
@@ -177,23 +289,41 @@ _ensure_state()
 
 st.title("Конструктор синтетических облаков точек")
 st.caption(
-    "Отдельная часть для искусственного создания данных: генерация завода, размещение объектов и сохранение облаков."
+    "Отдельная часть для искусственного создания данных: генерация промышленной сцены, размещение объектов и сохранение облаков."
 )
 
 with st.sidebar:
     st.subheader("Пути")
     output_root = st.text_input("Папка результатов", value=str(DEFAULT_OUTPUT_DIR))
 
-st.markdown("## 1) Генерация или загрузка завода")
+factory_state = st.session_state.get("factory_state")
+if factory_state is not None and factory_state.get("source") == "generated":
+    st.markdown("## Демонстрация сгенерированного OBJ")
+    scene_obj_path = str(factory_state.get("scene_obj_path", "")).strip()
+    if scene_obj_path:
+        st.write(f"3D-модель сцены: `{scene_obj_path}`")
+        try:
+            obj_fig, obj_vertices, obj_faces = _build_obj_figure(
+                scene_obj_path,
+                title="Сгенерированная промышленная сцена (OBJ)",
+            )
+            st.plotly_chart(obj_fig, use_container_width=True)
+            st.caption(f"Вершин: {obj_vertices} | Треугольников (в предпросмотре): {obj_faces}")
+        except Exception as obj_error:
+            st.warning(f"Не удалось показать OBJ: {obj_error}")
+    else:
+        st.info("OBJ для текущей сгенерированной сцены не найден.")
 
-tab_gen, tab_load = st.tabs(["Сгенерировать завод", "Загрузить готовый завод"])
+st.markdown("## 1) Генерация или загрузка промышленной сцены")
+
+tab_gen, tab_load = st.tabs(["Сгенерировать сцену", "Загрузить готовую сцену"])
 
 with tab_gen:
     col_a, col_b, col_c = st.columns(3)
     with col_a:
         gen_seed = st.number_input("Seed", min_value=1, value=42, step=1)
-        factory_width = st.number_input("Ширина завода (м)", min_value=40.0, value=120.0, step=5.0)
-        factory_depth = st.number_input("Глубина завода (м)", min_value=40.0, value=90.0, step=5.0)
+        factory_width = st.number_input("Ширина сцены (м)", min_value=40.0, value=120.0, step=5.0)
+        factory_depth = st.number_input("Глубина сцены (м)", min_value=40.0, value=90.0, step=5.0)
     with col_b:
         room_count = st.number_input("Количество комнат", min_value=2, value=9, step=1)
         room_height = st.number_input("Высота комнат (м)", min_value=3.0, value=6.0, step=0.5)
@@ -208,49 +338,88 @@ with tab_gen:
         )
         st.write("1.0 = базовая плотность, >1.0 плотнее, <1.0 реже")
 
-    if st.button("Сгенерировать завод и облако точек"):
-        with st.spinner("Генерация завода и LiDAR-облака..."):
-            result = generate_factory_cloud(
-                output_root=output_root,
-                seed=int(gen_seed),
-                factory_width=float(factory_width),
-                factory_depth=float(factory_depth),
-                room_count=int(room_count),
-                room_height=float(room_height),
-                lidar_density=float(lidar_density),
-                use_lasersensing=bool(use_lasersensing),
-            )
-        st.session_state["factory_state"] = {
-            "source": "generated",
-            "points": result.factory_points,
-            "labels": result.factory_labels,
-            "room_indices": result.factory_room_indices,
-            "rooms": result.rooms,
-            "room_index_lookup": result.room_index_lookup,
-            "cloud_path": result.factory_cloud_path,
-            "metadata_path": result.metadata_path,
-            "output_dir": result.output_dir,
-            "notes": result.notes,
-        }
-        st.success("Завод успешно сгенерирован.")
+    available_biomes = get_available_scene_biomes()
+    default_biome_selection = st.session_state.get("selected_scene_biomes", available_biomes)
+    if not isinstance(default_biome_selection, list):
+        default_biome_selection = list(available_biomes)
+    default_biome_selection = [name for name in default_biome_selection if name in available_biomes]
+    if not default_biome_selection:
+        default_biome_selection = list(available_biomes)
+    selected_biomes = st.multiselect(
+        "Биомы комнат для генерации сцены",
+        options=available_biomes,
+        default=default_biome_selection,
+        help=(
+            "Выберите типы комнат, которые нужно использовать при генерации. "
+            "Если workshop не выбран, он будет добавлен автоматически как базовая техническая зона. "
+            "При ручном выборе биомов доля workshop уменьшается до минимума, чтобы чаще встречались выбранные типы."
+        ),
+    )
+    st.session_state["selected_scene_biomes"] = list(selected_biomes)
+
+    if st.button("Сгенерировать промышленную сцену и облако точек"):
+        if not selected_biomes:
+            st.error("Выберите хотя бы один биом комнаты перед генерацией.")
+        else:
+            with st.spinner("Генерация промышленной сцены и LiDAR-облака..."):
+                result = generate_factory_cloud(
+                    output_root=output_root,
+                    seed=int(gen_seed),
+                    factory_width=float(factory_width),
+                    factory_depth=float(factory_depth),
+                    room_count=int(room_count),
+                    room_height=float(room_height),
+                    lidar_density=float(lidar_density),
+                    use_lasersensing=bool(use_lasersensing),
+                    selected_biomes=list(selected_biomes),
+                )
+            st.session_state["factory_state"] = {
+                "source": "generated",
+                "points": result.factory_points,
+                "labels": result.factory_labels,
+                "room_indices": result.factory_room_indices,
+                "rooms": result.rooms,
+                "room_index_lookup": result.room_index_lookup,
+                "cloud_path": result.factory_cloud_path,
+                "metadata_path": result.metadata_path,
+                "scene_obj_path": result.scene_obj_path,
+                "output_dir": result.output_dir,
+                "notes": result.notes,
+                "requested_biomes": list(selected_biomes),
+                "effective_biomes": sorted({str(room.biome).strip().lower() for room in result.rooms}),
+            }
+            st.success("Промышленная сцена успешно сгенерирована.")
 
 with tab_load:
-    cloud_path = st.text_input("Путь к облаку точек завода (.ply)", value="")
+    cloud_path = st.text_input("Путь к облаку точек промышленной сцены (.ply)", value="")
     metadata_path = st.text_input(
-        "Путь к метаданным завода (необязательно, JSON)",
+        "Путь к метаданным сцены (необязательно, JSON)",
         value="",
     )
-    if st.button("Загрузить готовый завод"):
-        with st.spinner("Загрузка облака завода..."):
+    if st.button("Загрузить готовую сцену"):
+        with st.spinner("Загрузка облака промышленной сцены..."):
             cloud_path_clean = sanitize_filesystem_path(cloud_path)
             metadata_path_clean = sanitize_filesystem_path(metadata_path)
             points, labels = load_point_cloud_file(cloud_path_clean)
             room_indices = labels.copy()
             rooms: list[RoomInfo] = []
             room_lookup: dict[str, int] = {}
+            scene_obj_path = ""
             if metadata_path_clean:
                 payload = json.loads(Path(metadata_path_clean).read_text(encoding="utf-8"))
                 rooms, room_lookup = _rooms_from_metadata(payload)
+                metadata_obj_path = str(payload.get("scene_obj_path", "")).strip()
+                if metadata_obj_path:
+                    normalized_obj_path = sanitize_filesystem_path(metadata_obj_path)
+                    candidate_obj = Path(normalized_obj_path)
+                    if not candidate_obj.is_absolute():
+                        candidate_obj = (Path(metadata_path_clean).resolve().parent / candidate_obj).resolve()
+                    scene_obj_path = str(candidate_obj)
+                requested_biomes = payload.get("requested_biomes", [])
+                effective_biomes = payload.get("effective_biome_cycle", [])
+            else:
+                requested_biomes = []
+                effective_biomes = []
             if not rooms:
                 rooms = build_single_room_from_cloud(points)
                 room_lookup = {rooms[0].room_id: 0}
@@ -265,23 +434,32 @@ with tab_load:
             "room_index_lookup": room_lookup,
             "cloud_path": cloud_path_clean,
             "metadata_path": metadata_path_clean or "",
+            "scene_obj_path": scene_obj_path,
             "output_dir": output_root,
             "notes": [],
+            "requested_biomes": requested_biomes,
+            "effective_biomes": effective_biomes,
         }
-        st.success("Готовый завод загружен.")
+        st.success("Готовая промышленная сцена загружена.")
 
 factory_state = st.session_state.get("factory_state")
 if factory_state is not None:
-    st.write(f"Источник завода: **{factory_state['source']}**")
+    st.write(f"Источник сцены: **{factory_state['source']}**")
     st.write(f"Облако: `{factory_state['cloud_path']}`")
     if factory_state.get("metadata_path"):
         st.write(f"Метаданные: `{factory_state['metadata_path']}`")
+    requested_biomes = factory_state.get("requested_biomes") or []
+    effective_biomes = factory_state.get("effective_biomes") or []
+    if requested_biomes:
+        st.write(f"Выбранные биомы: `{', '.join(str(name) for name in requested_biomes)}`")
+    if effective_biomes:
+        st.write(f"Эффективный набор биомов: `{', '.join(str(name) for name in effective_biomes)}`")
 
     for note in factory_state.get("notes", []):
         st.warning(note)
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Точек в заводе", int(len(factory_state["points"])))
+    c1.metric("Точек в сцене", int(len(factory_state["points"])))
     c2.metric("Комнат", int(len(factory_state["rooms"])))
     c3.metric("Диапазон меток", f"{int(factory_state['labels'].min())}..{int(factory_state['labels'].max())}")
 
@@ -289,21 +467,21 @@ if factory_state is not None:
         _build_cloud_figure(
             factory_state["points"],
             factory_state["labels"],
-            title="Облако точек завода",
+            title="Облако точек промышленной сцены",
             max_points=90000,
             point_size=2,
         ),
         use_container_width=True,
     )
 
-    st.markdown("### Сохранение облака завода")
+    st.markdown("### Сохранение облака сцены")
     default_factory_export = str(Path(output_root) / "factory_cloud_saved.ply")
     factory_export_path = st.text_input(
-        "Куда сохранить облако завода (.ply)",
+        "Куда сохранить облако сцены (.ply)",
         value=default_factory_export,
         key="factory_export_path",
     )
-    if st.button("Сохранить облако завода как..."):
+    if st.button("Сохранить облако сцены как..."):
         try:
             saved_path = save_factory_cloud_as(
                 path=factory_export_path,
@@ -312,15 +490,15 @@ if factory_state is not None:
                 room_indices=factory_state["room_indices"],
             )
         except Exception as export_error:
-            st.error(f"Ошибка сохранения облака завода: {export_error}")
+            st.error(f"Ошибка сохранения облака сцены: {export_error}")
         else:
-            st.success(f"Облако завода сохранено: {saved_path}")
+            st.success(f"Облако сцены сохранено: {saved_path}")
 else:
-    st.info("Сначала сгенерируйте завод или загрузите готовое облако.")
+    st.info("Сначала сгенерируйте промышленную сцену или загрузите готовое облако.")
 
-st.markdown("## 2) Размещение облаков объектов в заводе")
+st.markdown("## 2) Размещение облаков объектов в промышленной сцене")
 if factory_state is None:
-    st.warning("Блок размещения доступен после подготовки облака завода.")
+    st.warning("Блок размещения доступен после подготовки облака сцены.")
 else:
     st.caption("Добавляйте объекты по одному: укажите конкретный `.ply`, добавьте в очередь и выполните размещение.")
     col_q1, col_q2, col_q3 = st.columns(3)
@@ -387,7 +565,7 @@ else:
 
     st.dataframe(_queue_table(st.session_state.get("object_queue", [])), use_container_width=True, hide_index=True)
 
-    if st.button("Разместить объекты из очереди в заводе"):
+    if st.button("Разместить объекты из очереди в сцене"):
         queue = st.session_state.get("object_queue", [])
         if not queue:
             st.error("Очередь пуста. Добавьте хотя бы один объект.")
@@ -424,7 +602,7 @@ if placement_state is not None:
             _build_cloud_figure(
                 placement_state.combined_points,
                 placement_state.combined_source,
-                title="Комбинированное облако (0=завод, 1=объекты)",
+                title="Комбинированное облако (0=сцена, 1=объекты)",
                 max_points=100000,
                 point_size=2,
             ),
