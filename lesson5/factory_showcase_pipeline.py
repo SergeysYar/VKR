@@ -1904,6 +1904,99 @@ def classify_object_parts(
     )
 
 
+def build_classification_from_labeled_cloud(
+    *,
+    points: np.ndarray,
+    labels: np.ndarray,
+    source: str = "prelabeled_segments",
+) -> PartClassificationResult:
+    normalized_points = points.astype(np.float32, copy=False)
+    aligned_labels = _align_labels(normalized_points, labels).astype(np.int32, copy=False)
+    notes: list[str] = []
+    unique_count = int(len(np.unique(aligned_labels)))
+    if unique_count <= 1:
+        notes.append(
+            "В загруженном облаке найдена только одна метка сегментации. "
+            "Для демо лучше использовать заранее размеченное облако с несколькими сегментами."
+        )
+    return PartClassificationResult(
+        points=normalized_points,
+        labels=aligned_labels,
+        source=source,
+        notes=notes,
+    )
+
+
+def _write_obj_vertices_only(path: Path, points: np.ndarray) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("# OBJ exported from reconstructed point cloud\n")
+        for x, y, z in points:
+            handle.write(f"v {float(x):.8f} {float(y):.8f} {float(z):.8f}\n")
+    return str(path)
+
+
+def export_reconstruction_obj(
+    reconstruction: ReconstructionResult,
+    *,
+    output_path: str | Path | None = None,
+) -> dict[str, Any]:
+    if output_path is None:
+        if reconstruction.generated_files:
+            base_dir = Path(reconstruction.generated_files[0]).resolve().parent
+        else:
+            base_dir = Path.cwd()
+        target = base_dir / f"{reconstruction.object_id}_reconstruction.obj"
+    else:
+        target = Path(output_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    mesh_files = [
+        Path(item)
+        for item in reconstruction.generated_files
+        if str(item).lower().endswith(".ply") and "_mesh" in Path(item).name.lower()
+    ]
+    mesh_created = False
+    mesh_error: str | None = None
+
+    try:
+        import open3d as o3d  # type: ignore
+
+        merged_mesh = o3d.geometry.TriangleMesh()
+        for file_path in mesh_files:
+            if not file_path.exists():
+                continue
+            try:
+                mesh = o3d.io.read_triangle_mesh(str(file_path))
+            except Exception:
+                continue
+            if len(mesh.vertices) == 0 or len(mesh.triangles) == 0:
+                continue
+            merged_mesh += mesh
+
+        if len(merged_mesh.vertices) > 0 and len(merged_mesh.triangles) > 0:
+            merged_mesh.remove_degenerate_triangles()
+            merged_mesh.remove_duplicated_triangles()
+            merged_mesh.remove_duplicated_vertices()
+            merged_mesh.remove_unreferenced_vertices()
+            o3d.io.write_triangle_mesh(str(target), merged_mesh, write_triangle_uvs=False)
+            mesh_created = True
+    except Exception as error:
+        mesh_error = str(error)
+
+    if not mesh_created:
+        points = reconstruction.combined_points.astype(np.float32, copy=False)
+        if len(points) == 0:
+            raise ValueError("Нет восстановленных точек для экспорта OBJ.")
+        _write_obj_vertices_only(target, points)
+
+    return {
+        "obj_path": str(target),
+        "mode": "mesh" if mesh_created else "points_only",
+        "mesh_error": mesh_error,
+    }
+
+
 def _surface_type(points: np.ndarray) -> str:
     if len(points) < 20:
         return "small"

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import shutil
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -10,8 +12,10 @@ import streamlit as st
 from dataset import sanitize_filesystem_path
 from engineering_classifier import find_latest_checkpoint
 from factory_showcase_pipeline import (
+    build_classification_from_labeled_cloud,
     build_virtual_object,
     classify_object_parts,
+    export_reconstruction_obj,
     finetune_object_model,
     finetune_recognition_model,
     load_point_cloud_file,
@@ -81,6 +85,108 @@ def _build_cloud_figure(
     return fig
 
 
+def _load_obj_preview_mesh(
+    obj_path: str | Path,
+    *,
+    max_faces: int = 120000,
+) -> tuple[np.ndarray, np.ndarray]:
+    path = Path(obj_path)
+    if not path.exists():
+        raise FileNotFoundError(f"OBJ не найден: {path}")
+
+    vertices: list[tuple[float, float, float]] = []
+    faces: list[tuple[int, int, int]] = []
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for line in handle:
+            if line.startswith("v "):
+                parts = line.strip().split()
+                if len(parts) >= 4:
+                    try:
+                        vertices.append((float(parts[1]), float(parts[2]), float(parts[3])))
+                    except ValueError:
+                        continue
+                continue
+            if not line.startswith("f "):
+                continue
+            tokens = line.strip().split()[1:]
+            if len(tokens) < 3:
+                continue
+            indices: list[int] = []
+            for token in tokens:
+                idx_token = token.split("/", maxsplit=1)[0].strip()
+                if not idx_token:
+                    continue
+                try:
+                    idx = int(idx_token)
+                except ValueError:
+                    continue
+                if idx < 0:
+                    idx = len(vertices) + idx + 1
+                zero_based = idx - 1
+                if zero_based >= 0:
+                    indices.append(zero_based)
+            if len(indices) < 3:
+                continue
+            base = indices[0]
+            for i in range(1, len(indices) - 1):
+                faces.append((base, indices[i], indices[i + 1]))
+
+    if not vertices:
+        raise ValueError("OBJ не содержит вершин.")
+
+    vertices_np = np.asarray(vertices, dtype=np.float32)
+    valid_faces = [face for face in faces if max(face) < len(vertices_np)]
+    faces_np = np.asarray(valid_faces, dtype=np.int32) if valid_faces else np.zeros((0, 3), dtype=np.int32)
+    if max_faces > 0 and len(faces_np) > max_faces:
+        step = max(1, len(faces_np) // max_faces)
+        faces_np = faces_np[::step]
+    return vertices_np, faces_np
+
+
+def _build_obj_figure(
+    obj_path: str | Path,
+    *,
+    title: str,
+) -> tuple[go.Figure, int, int]:
+    vertices, faces = _load_obj_preview_mesh(obj_path)
+    if len(faces) == 0:
+        fig = _build_cloud_figure(vertices, None, title=title, max_points=100000, point_size=2)
+        return fig, int(len(vertices)), 0
+
+    fig = go.Figure(
+        data=[
+            go.Mesh3d(
+                x=vertices[:, 0],
+                y=vertices[:, 1],
+                z=vertices[:, 2],
+                i=faces[:, 0],
+                j=faces[:, 1],
+                k=faces[:, 2],
+                color="#9CAEC4",
+                opacity=0.95,
+                flatshading=True,
+                lighting={
+                    "ambient": 0.45,
+                    "diffuse": 0.9,
+                    "specular": 0.2,
+                    "roughness": 0.6,
+                },
+            )
+        ]
+    )
+    fig.update_layout(
+        title=title,
+        margin={"l": 0, "r": 0, "t": 40, "b": 0},
+        scene={
+            "xaxis_title": "X",
+            "yaxis_title": "Y",
+            "zaxis_title": "Z",
+            "aspectmode": "data",
+        },
+    )
+    return fig, int(len(vertices)), int(len(faces))
+
+
 def _class_hist_table(hist: dict[int, int]) -> pd.DataFrame:
     rows = [{"Метка": int(label), "Точек": int(count)} for label, count in sorted(hist.items())]
     if not rows:
@@ -101,6 +207,7 @@ def _ensure_state() -> None:
     st.session_state.setdefault("segmentation_finetune_state", None)
     st.session_state.setdefault("segmentation_state", None)
     st.session_state.setdefault("reconstruction_state", None)
+    st.session_state.setdefault("demo_mode_state", None)
 
 
 if not EMBEDDED_MODE:
@@ -128,6 +235,182 @@ with st.sidebar:
         "Папка весов сегментации",
         value=str(DEFAULT_SEGMENTATION_WEIGHTS_DIR),
     )
+
+st.markdown("## Демо-режим идеальной работы")
+st.caption(
+    "Сценарий для демонстрации: загружаем заранее размеченное облако запорной арматуры, "
+    "показываем его как неразмеченное (этап распознавания), затем как сегментированное, "
+    "после чего выполняем восстановление и показываем итоговый OBJ."
+)
+
+dcol1, dcol2, dcol3 = st.columns(3)
+with dcol1:
+    demo_cloud_path = st.text_input(
+        "Путь к заранее размеченному облаку (.ply)",
+        value="",
+        key="demo_cloud_path",
+    )
+    demo_object_class = st.text_input(
+        "Тип объекта для демо",
+        value="valve",
+        key="demo_object_class",
+    )
+with dcol2:
+    demo_min_points_part = st.number_input(
+        "Мин. точек на сегмент (демо)",
+        min_value=10,
+        value=45,
+        step=5,
+        key="demo_min_points_part",
+    )
+    demo_prefer_surface_module = st.checkbox(
+        "Предпочесть SurfaceReconstructor в демо",
+        value=True,
+        key="demo_prefer_surface_module",
+    )
+with dcol3:
+    demo_surface_ckpt = st.text_input(
+        "Checkpoint SurfaceReconstructor (демо, опционально)",
+        value="",
+        key="demo_surface_ckpt",
+    )
+    demo_clear_prev = st.checkbox(
+        "Очистить предыдущий демо-результат перед запуском",
+        value=False,
+        key="demo_clear_prev",
+    )
+
+if st.button("Запустить демо-сценарий 'идеальная работа'"):
+    try:
+        demo_path_clean = sanitize_filesystem_path(demo_cloud_path)
+        if not demo_path_clean:
+            raise ValueError("Укажите путь к заранее размеченному облаку.")
+        points, labels = load_point_cloud_file(demo_path_clean)
+        object_class_name = demo_object_class.strip() or "valve"
+        object_id = f"{object_class_name}_demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        demo_output_dir = Path(output_root) / "demo_mode" / object_id
+
+        if demo_clear_prev and demo_output_dir.exists():
+            for child in demo_output_dir.iterdir():
+                if child.is_file():
+                    child.unlink(missing_ok=True)
+                elif child.is_dir():
+                    shutil.rmtree(child, ignore_errors=True)
+
+        with st.spinner("Запускаем демо: распознавание -> сегментация -> восстановление..."):
+            classification = build_classification_from_labeled_cloud(
+                points=points,
+                labels=labels,
+                source="prelabeled_demo",
+            )
+            reconstruction = reconstruct_object_surfaces(
+                object_id=object_id,
+                classification=classification,
+                output_dir=demo_output_dir,
+                min_points_per_part=int(demo_min_points_part),
+                prefer_surface_module=bool(demo_prefer_surface_module),
+                checkpoint_path=demo_surface_ckpt.strip() or None,
+            )
+            obj_export = export_reconstruction_obj(
+                reconstruction,
+                output_path=demo_output_dir / f"{object_id}_reconstruction.obj",
+            )
+    except Exception as demo_error:
+        st.session_state.pop("demo_mode_state", None)
+        st.error(f"Ошибка демо-сценария: {demo_error}")
+    else:
+        unique_labels, counts = np.unique(classification.labels, return_counts=True)
+        st.session_state["demo_mode_state"] = {
+            "object_id": object_id,
+            "object_class": object_class_name,
+            "source_path": demo_path_clean,
+            "input_points": points.astype(np.float32, copy=False),
+            "input_labels": labels.astype(np.int32, copy=False),
+            "classification": classification,
+            "reconstruction": reconstruction,
+            "obj_export": obj_export,
+            "histogram": {int(label): int(count) for label, count in zip(unique_labels, counts)},
+        }
+        st.success("Демо-сценарий выполнен.")
+
+demo_mode_state = st.session_state.get("demo_mode_state")
+if demo_mode_state is not None:
+    st.markdown("### Демонстрация шагов")
+    st.write(
+        f"Объект: **{demo_mode_state['object_id']}** | "
+        f"Тип: **{demo_mode_state['object_class']}** | "
+        f"Источник: `{demo_mode_state['source_path']}`"
+    )
+
+    st.markdown("#### Шаг 1. Распознавание объекта (визуально без разметки)")
+    st.success(
+        f"Объект распознан как `{demo_mode_state['object_class']}`. "
+        "Ниже показывается входное облако без сегментных меток."
+    )
+    st.plotly_chart(
+        _build_cloud_figure(
+            demo_mode_state["input_points"],
+            None,
+            title="Демо: распознанный объект (без разметки)",
+            max_points=90000,
+            point_size=2,
+        ),
+        use_container_width=True,
+    )
+
+    st.markdown("#### Шаг 2. Сегментация (показываем заранее размеченные сегменты)")
+    st.plotly_chart(
+        _build_cloud_figure(
+            demo_mode_state["classification"].points,
+            demo_mode_state["classification"].labels,
+            title="Демо: сегментация завершена",
+            max_points=90000,
+            point_size=3,
+        ),
+        use_container_width=True,
+    )
+    st.dataframe(
+        _class_hist_table(demo_mode_state["histogram"]),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    st.markdown("#### Шаг 3. Восстановление и демонстрация OBJ")
+    reconstruction = demo_mode_state["reconstruction"]
+    obj_export = demo_mode_state["obj_export"]
+    st.write(
+        f"Результат восстановления: backend=`{reconstruction.backend}`, "
+        f"файлов=`{len(reconstruction.generated_files)}`"
+    )
+    if reconstruction.notes:
+        for note in reconstruction.notes:
+            st.warning(note)
+
+    st.write(f"Восстановленный OBJ: `{obj_export['obj_path']}` (режим: `{obj_export['mode']}`)")
+    if obj_export.get("mesh_error"):
+        st.caption(f"Примечание экспорта OBJ: {obj_export['mesh_error']}")
+
+    try:
+        obj_fig, obj_vertices, obj_faces = _build_obj_figure(
+            obj_export["obj_path"],
+            title="Демо: восстановленный OBJ",
+        )
+        st.plotly_chart(obj_fig, use_container_width=True)
+        st.caption(f"OBJ вершин: {obj_vertices} | треугольников (предпросмотр): {obj_faces}")
+    except Exception as obj_preview_error:
+        st.warning(f"Не удалось построить предпросмотр OBJ: {obj_preview_error}")
+
+    if len(reconstruction.combined_points) > 0:
+        st.plotly_chart(
+            _build_cloud_figure(
+                reconstruction.combined_points,
+                None,
+                title="Восстановленная геометрия (облако точек)",
+                max_points=90000,
+                point_size=2,
+            ),
+            use_container_width=True,
+        )
 
 st.markdown("## 1) Загрузка готового облака для анализа")
 analysis_cloud_path = st.text_input("Путь к облаку точки (.ply)", value="")
