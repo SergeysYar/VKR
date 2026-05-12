@@ -82,16 +82,23 @@ def _load_obj_preview_mesh(
     obj_path: str | Path,
     *,
     max_faces: int = 120000,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     path = Path(obj_path)
     if not path.exists():
         raise FileNotFoundError(f"OBJ не найден: {path}")
 
     vertices: list[tuple[float, float, float]] = []
     faces: list[tuple[int, int, int]] = []
+    face_objects: list[str] = []
+    current_object = "scene"
 
     with path.open("r", encoding="utf-8", errors="ignore") as handle:
         for line in handle:
+            if line.startswith("o "):
+                object_name = line.strip()[2:].strip()
+                current_object = object_name or "scene"
+                continue
+
             if line.startswith("v "):
                 parts = line.strip().split()
                 if len(parts) < 4:
@@ -128,23 +135,51 @@ def _load_obj_preview_mesh(
             base = indices[0]
             for i in range(1, len(indices) - 1):
                 faces.append((base, indices[i], indices[i + 1]))
+                face_objects.append(current_object)
 
     if not vertices or not faces:
         raise ValueError("OBJ не содержит корректной геометрии для предпросмотра.")
 
     vertices_np = np.asarray(vertices, dtype=np.float32)
-    faces_np = np.asarray(
-        [face for face in faces if max(face) < len(vertices_np)],
-        dtype=np.int32,
-    )
+    valid_faces: list[tuple[int, int, int]] = []
+    valid_face_objects: list[str] = []
+    for index, face in enumerate(faces):
+        if max(face) < len(vertices_np):
+            valid_faces.append(face)
+            valid_face_objects.append(face_objects[index])
+
+    faces_np = np.asarray(valid_faces, dtype=np.int32)
     if len(faces_np) == 0:
         raise ValueError("В OBJ не найдено валидных граней после проверки индексов.")
+    face_objects_np = np.asarray(valid_face_objects, dtype=object)
 
     if max_faces > 0 and len(faces_np) > max_faces:
         step = max(1, len(faces_np) // max_faces)
         faces_np = faces_np[::step]
+        face_objects_np = face_objects_np[::step]
 
-    return vertices_np, faces_np
+    return vertices_np, faces_np, face_objects_np
+
+
+def _is_shell_like_object_name(name: str) -> bool:
+    normalized = str(name).strip().lower()
+    if not normalized:
+        return False
+    if normalized.startswith(("shell_", "exterior_", "corridor_", "connector_")):
+        return True
+    if normalized.startswith("room_") and any(token in normalized for token in ("_wall", "_floor", "_ceiling")):
+        return True
+    tokens = (
+        "_wall_",
+        "_ceiling_",
+        "_floor_",
+        "foundation",
+        "parapet",
+        "roof",
+        "window_opening",
+        "door_opening",
+    )
+    return any(token in normalized for token in tokens)
 
 
 def _build_obj_figure(
@@ -152,17 +187,83 @@ def _build_obj_figure(
     *,
     title: str,
     max_faces: int = 120000,
+    preview_mode: str = "full",
 ) -> tuple[go.Figure, int, int]:
-    vertices, faces = _load_obj_preview_mesh(obj_path, max_faces=max_faces)
-    fig = go.Figure(
-        data=[
+    vertices, faces, face_objects = _load_obj_preview_mesh(obj_path, max_faces=max_faces)
+    shell_mask = np.array([_is_shell_like_object_name(name) for name in face_objects], dtype=bool)
+
+    filtered_faces = faces
+    if preview_mode == "content_only":
+        keep_mask = ~shell_mask
+        if np.any(keep_mask):
+            filtered_faces = faces[keep_mask]
+    elif preview_mode == "cutaway":
+        z_values = vertices[:, 2]
+        z_cut = float(np.quantile(z_values, 0.62))
+        face_center_z = (
+            z_values[faces[:, 0]] + z_values[faces[:, 1]] + z_values[faces[:, 2]]
+        ) / 3.0
+        keep_mask = face_center_z <= z_cut
+        if np.any(keep_mask):
+            filtered_faces = faces[keep_mask]
+
+    fig = go.Figure()
+    if preview_mode == "xray":
+        shell_faces = faces[shell_mask] if np.any(shell_mask) else np.zeros((0, 3), dtype=np.int32)
+        content_faces = faces[~shell_mask] if np.any(~shell_mask) else faces
+        if len(shell_faces) > 0:
+            fig.add_trace(
+                go.Mesh3d(
+                    x=vertices[:, 0],
+                    y=vertices[:, 1],
+                    z=vertices[:, 2],
+                    i=shell_faces[:, 0],
+                    j=shell_faces[:, 1],
+                    k=shell_faces[:, 2],
+                    color="#94A3B8",
+                    flatshading=True,
+                    opacity=0.08,
+                    lighting={
+                        "ambient": 0.45,
+                        "diffuse": 0.9,
+                        "specular": 0.15,
+                        "roughness": 0.8,
+                    },
+                    name="Оболочка",
+                    showscale=False,
+                )
+            )
+        if len(content_faces) > 0:
+            fig.add_trace(
+                go.Mesh3d(
+                    x=vertices[:, 0],
+                    y=vertices[:, 1],
+                    z=vertices[:, 2],
+                    i=content_faces[:, 0],
+                    j=content_faces[:, 1],
+                    k=content_faces[:, 2],
+                    color="#2563EB",
+                    flatshading=True,
+                    opacity=0.95,
+                    lighting={
+                        "ambient": 0.45,
+                        "diffuse": 0.9,
+                        "specular": 0.2,
+                        "roughness": 0.6,
+                    },
+                    name="Наполнение",
+                    showscale=False,
+                )
+            )
+    else:
+        fig.add_trace(
             go.Mesh3d(
                 x=vertices[:, 0],
                 y=vertices[:, 1],
                 z=vertices[:, 2],
-                i=faces[:, 0],
-                j=faces[:, 1],
-                k=faces[:, 2],
+                i=filtered_faces[:, 0],
+                j=filtered_faces[:, 1],
+                k=filtered_faces[:, 2],
                 color="#9CAEC4",
                 flatshading=True,
                 opacity=0.95,
@@ -173,8 +274,8 @@ def _build_obj_figure(
                     "roughness": 0.6,
                 },
             )
-        ]
-    )
+        )
+
     fig.update_layout(
         title=title,
         margin={"l": 0, "r": 0, "t": 40, "b": 0},
@@ -185,7 +286,9 @@ def _build_obj_figure(
             "aspectmode": "data",
         },
     )
-    return fig, int(len(vertices)), int(len(faces))
+
+    displayed_faces = len(faces) if preview_mode == "xray" else len(filtered_faces)
+    return fig, int(len(vertices)), int(displayed_faces)
 
 
 def _ensure_state() -> None:
@@ -299,10 +402,33 @@ if factory_state is not None and factory_state.get("source") == "generated":
     scene_obj_path = str(factory_state.get("scene_obj_path", "")).strip()
     if scene_obj_path:
         st.write(f"3D-модель сцены: `{scene_obj_path}`")
+        preview_options = {
+            "Полная геометрия": "full",
+            "Только наполнение (без оболочки)": "content_only",
+            "Срез по высоте": "cutaway",
+            "Наполнение + прозрачная оболочка": "xray",
+        }
+        col_mode, col_faces = st.columns([2, 1])
+        with col_mode:
+            selected_preview_label = st.selectbox(
+                "Режим предпросмотра OBJ",
+                options=list(preview_options.keys()),
+                index=3,
+            )
+        with col_faces:
+            max_faces_preview = st.slider(
+                "Лимит треугольников",
+                min_value=20000,
+                max_value=300000,
+                value=120000,
+                step=20000,
+            )
         try:
             obj_fig, obj_vertices, obj_faces = _build_obj_figure(
                 scene_obj_path,
                 title="Сгенерированная промышленная сцена (OBJ)",
+                max_faces=int(max_faces_preview),
+                preview_mode=preview_options[selected_preview_label],
             )
             st.plotly_chart(obj_fig, use_container_width=True)
             st.caption(f"Вершин: {obj_vertices} | Треугольников (в предпросмотре): {obj_faces}")
@@ -634,3 +760,4 @@ if placement_state is not None:
             st.error(f"Ошибка сохранения комбинированного облака: {export_error}")
         else:
             st.success(f"Комбинированное облако сохранено: {saved_path}")
+

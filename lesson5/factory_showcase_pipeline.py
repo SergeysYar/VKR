@@ -457,8 +457,8 @@ def _default_lidar_settings(seed: int, density_factor: float = 1.0) -> dict[str,
     exterior_density = min(1.0, max(0.05, 0.3 * density))
     return {
         "scan_range": 26.0,
-        "angular_resolution_deg": 2.0,
-        "vertical_resolution_deg": 12.0,
+        "angular_resolution_deg": 1.5,
+        "vertical_resolution_deg": 8.0,
         "vertical_fov_up_deg": 35.0,
         "vertical_fov_down_deg": 55.0,
         "sensor_height": 1.6,
@@ -468,7 +468,7 @@ def _default_lidar_settings(seed: int, density_factor: float = 1.0) -> dict[str,
         "station_margin": 0.95,
         "obstacle_clearance": 0.35,
         "ensure_blind_spot_coverage": True,
-        "include_structural": False,
+        "include_structural": True,
         "global_coverage": False,
         "include_factory_room": False,
         "point_multiplier": point_multiplier,
@@ -534,6 +534,95 @@ def _try_lasersensing_station_plan(
         return None, "laserSensing planner produced no stations."
     output = [(float(x), float(y)) for x, y in centers]
     return output, "laserSensing planner was applied."
+
+
+def _station_identity(station: Any) -> tuple[str, int, int, int]:
+    room_id = str(getattr(station, "room_id", ""))
+    x = int(round(float(getattr(station, "x", 0.0)) * 100))
+    y = int(round(float(getattr(station, "y", 0.0)) * 100))
+    z = int(round(float(getattr(station, "z", 0.0)) * 100))
+    return room_id, x, y, z
+
+
+def _make_station(index: int, room_id: str, x: float, y: float, z: float) -> Any:
+    return LidarStation(
+        id=f"lidar_station_{index}",
+        room_id=str(room_id),
+        x=float(x),
+        y=float(y),
+        z=float(z),
+    )
+
+
+def _merge_lasersensing_stations(
+    preferred: list[Any],
+    fallback: list[Any],
+    rooms: list[RoomInfo],
+) -> tuple[list[Any], str]:
+    if not preferred:
+        if fallback:
+            stations = [
+                _make_station(index, station.room_id, station.x, station.y, station.z)
+                for index, station in enumerate(fallback, start=1)
+            ]
+            return stations, f"laserSensing fallback: used default LiDAR stations ({len(stations)})."
+        return [], "laserSensing fallback: no stations available."
+
+    selected: list[Any] = []
+    seen: set[tuple[str, int, int, int]] = set()
+
+    def add_unique(station: Any) -> None:
+        key = _station_identity(station)
+        if key in seen:
+            return
+        seen.add(key)
+        selected.append(station)
+
+    for station in preferred:
+        add_unique(station)
+
+    if not fallback:
+        stations = [
+            _make_station(index, station.room_id, station.x, station.y, station.z)
+            for index, station in enumerate(selected, start=1)
+        ]
+        return stations, f"laserSensing stations: {len(stations)}."
+
+    room_ids = {room.room_id for room in rooms}
+    covered_room_ids = {str(getattr(station, "room_id", "")) for station in selected}
+    missing_room_ids = sorted(room_ids - covered_room_ids)
+    if missing_room_ids:
+        fallback_by_room: dict[str, list[Any]] = {}
+        for station in fallback:
+            fallback_by_room.setdefault(str(station.room_id), []).append(station)
+        for room_id in missing_room_ids:
+            candidates = fallback_by_room.get(room_id, [])
+            if candidates:
+                add_unique(candidates[0])
+
+    min_station_target = max(
+        len(room_ids),
+        max(2, int(math.ceil(len(fallback) * 0.45))),
+    )
+    min_station_target = min(len(fallback), min_station_target)
+
+    if len(selected) < min_station_target:
+        for station in fallback:
+            add_unique(station)
+            if len(selected) >= min_station_target:
+                break
+
+    merged = [
+        _make_station(index, station.room_id, station.x, station.y, station.z)
+        for index, station in enumerate(selected, start=1)
+    ]
+    return (
+        merged,
+        (
+            f"laserSensing stations: {len(preferred)}; "
+            f"after merge with default planner: {len(merged)}."
+        ),
+    )
 
 
 def _flatten_lidar_points(
@@ -825,7 +914,8 @@ def generate_factory_cloud(
 
     lidar_settings = _default_lidar_settings(seed=seed, density_factor=lidar_density)
     lidar_generator = LidarSurveyGenerator(lidar_settings)
-    stations = None
+    default_stations = lidar_generator.plan_stations(scene)
+    stations = list(default_stations)
 
     if use_lasersensing:
         candidate_centers, planner_message = _try_lasersensing_station_plan(
@@ -834,21 +924,24 @@ def generate_factory_cloud(
         )
         notes.append(planner_message)
         if candidate_centers:
-            stations = []
+            laser_stations = []
             for index, (x, y) in enumerate(candidate_centers, start=1):
                 room_id = _find_room_for_xy(x, y, rooms)
-                stations.append(
-                    LidarStation(
-                        id=f"lidar_station_{index}",
+                laser_stations.append(
+                    _make_station(
+                        index=index,
                         room_id=room_id,
                         x=float(x),
                         y=float(y),
                         z=float(room_height * 0.28),
                     )
                 )
-
-    if not stations:
-        stations = lidar_generator.plan_stations(scene)
+            stations, merge_note = _merge_lasersensing_stations(
+                preferred=laser_stations,
+                fallback=default_stations,
+                rooms=rooms,
+            )
+            notes.append(merge_note)
 
     circles = lidar_generator.generate_scans(scene, stations)
     factory_points, factory_labels, factory_room_indices = _flatten_lidar_points(
@@ -1324,7 +1417,8 @@ def run_factory_demo(
 
     lidar_settings = _default_lidar_settings(seed=seed, density_factor=lidar_density)
     lidar_generator = LidarSurveyGenerator(lidar_settings)
-    stations = None
+    default_stations = lidar_generator.plan_stations(scene)
+    stations = list(default_stations)
     notes: list[str] = []
 
     if use_lasersensing:
@@ -1334,21 +1428,24 @@ def run_factory_demo(
         )
         notes.append(planner_message)
         if candidate_centers:
-            stations = []
+            laser_stations = []
             for index, (x, y) in enumerate(candidate_centers, start=1):
                 room_id = _find_room_for_xy(x, y, rooms)
-                stations.append(
-                    LidarStation(
-                        id=f"lidar_station_{index}",
+                laser_stations.append(
+                    _make_station(
+                        index=index,
                         room_id=room_id,
                         x=float(x),
                         y=float(y),
                         z=float(room_height * 0.28),
                     )
                 )
-
-    if not stations:
-        stations = lidar_generator.plan_stations(scene)
+            stations, merge_note = _merge_lasersensing_stations(
+                preferred=laser_stations,
+                fallback=default_stations,
+                rooms=rooms,
+            )
+            notes.append(merge_note)
 
     circles = lidar_generator.generate_scans(scene, stations)
     factory_points, factory_labels, factory_room_indices = _flatten_lidar_points(
