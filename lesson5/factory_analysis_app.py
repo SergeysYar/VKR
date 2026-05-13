@@ -311,19 +311,10 @@ if demo_mode_enabled:
     )
     demo_prefer_surface_module = st.checkbox(
         "Предпочесть SurfaceReconstructor в демо",
-        value=True,
+        value=False,
         key="demo_prefer_surface_module",
     )
-    demo_surface_ckpt = st.text_input(
-        "Checkpoint SurfaceReconstructor (демо, опционально)",
-        value="",
-        key="demo_surface_ckpt",
-    )
-    uploaded_demo_surface_ckpt = st.file_uploader(
-        "Или выберите checkpoint SurfaceReconstructor для демо",
-        type=["ckpt"],
-        key="demo_surface_ckpt_upload",
-    )
+    st.caption("Демо-сценарий работает без весов .ckpt.")
     demo_clear_prev = st.checkbox(
         "Очистить предыдущий демо-результат перед запуском",
         value=False,
@@ -342,14 +333,6 @@ if demo_mode_enabled:
             )
             if not demo_path_clean:
                 raise ValueError("Укажите путь к заранее размеченному облаку.")
-            demo_surface_ckpt_path = _resolve_file_input(
-                path_value=demo_surface_ckpt,
-                uploaded_file=uploaded_demo_surface_ckpt,
-                output_root=output_root,
-                prefix="demo_surface_ckpt",
-                session_key="demo_surface_ckpt",
-                fallback_suffix=".ckpt",
-            )
             points, labels = load_point_cloud_file(demo_path_clean)
             object_class_name = demo_object_class.strip() or "valve"
             object_id = f"{object_class_name}_demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -368,13 +351,29 @@ if demo_mode_enabled:
                     labels=labels,
                     source="prelabeled_demo",
                 )
+                if len(np.unique(classification.labels)) <= 1:
+                    demo_virtual_object = build_virtual_object(
+                        points=points,
+                        instance_id=object_id,
+                        object_class=object_class_name,
+                        source_file=demo_path_clean,
+                    )
+                    classification = classify_object_parts(
+                        obj=demo_virtual_object,
+                        checkpoint_path=None,
+                        num_points=4096,
+                    )
+                    classification.notes.insert(
+                        0,
+                        "Демо: метки сегментации в исходном облаке не найдены, применена автоматическая геометрическая сегментация без .ckpt.",
+                    )
                 reconstruction = reconstruct_object_surfaces(
                     object_id=object_id,
                     classification=classification,
                     output_dir=demo_output_dir,
                     min_points_per_part=int(demo_min_points_part),
                     prefer_surface_module=bool(demo_prefer_surface_module),
-                    checkpoint_path=demo_surface_ckpt_path or None,
+                    checkpoint_path=None,
                 )
                 obj_export = export_reconstruction_obj(
                     reconstruction,
