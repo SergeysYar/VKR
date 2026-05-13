@@ -13,6 +13,7 @@ from factory_showcase_pipeline import (
     RoomInfo,
     build_single_room_from_cloud,
     generate_factory_cloud,
+    generate_factory_scene_preview,
     get_available_scene_biomes,
     load_point_cloud_file,
     place_object_files_in_factory_cloud,
@@ -293,6 +294,7 @@ def _build_obj_figure(
 
 def _ensure_state() -> None:
     st.session_state.setdefault("factory_state", None)
+    st.session_state.setdefault("scene_preview_state", None)
     st.session_state.setdefault("placement_state", None)
     st.session_state.setdefault("object_queue", [])
 
@@ -397,9 +399,16 @@ with st.sidebar:
     output_root = st.text_input("Папка результатов", value=str(DEFAULT_OUTPUT_DIR))
 
 factory_state = st.session_state.get("factory_state")
-if factory_state is not None and factory_state.get("source") == "generated":
+scene_preview_state = st.session_state.get("scene_preview_state")
+obj_preview_state = None
+if scene_preview_state is not None and scene_preview_state.get("scene_obj_path"):
+    obj_preview_state = scene_preview_state
+elif factory_state is not None and factory_state.get("source") == "generated":
+    obj_preview_state = factory_state
+
+if obj_preview_state is not None:
     st.markdown("## Демонстрация сгенерированного OBJ")
-    scene_obj_path = str(factory_state.get("scene_obj_path", "")).strip()
+    scene_obj_path = str(obj_preview_state.get("scene_obj_path", "")).strip()
     if scene_obj_path:
         st.write(f"3D-модель сцены: `{scene_obj_path}`")
         preview_options = {
@@ -462,39 +471,92 @@ with tab_gen:
         st.write("1.0 = базовая плотность, >1.0 плотнее, <1.0 реже")
 
     available_biomes = get_available_scene_biomes()
-    default_biome_selection = st.session_state.get("selected_scene_biomes", available_biomes)
-    if not isinstance(default_biome_selection, list):
-        default_biome_selection = list(available_biomes)
-    default_biome_selection = [name for name in default_biome_selection if name in available_biomes]
-    if not default_biome_selection:
-        default_biome_selection = list(available_biomes)
+    if "selected_scene_biomes" not in st.session_state:
+        st.session_state["selected_scene_biomes"] = list(available_biomes)
+    else:
+        saved_biomes = st.session_state.get("selected_scene_biomes", [])
+        if not isinstance(saved_biomes, list):
+            saved_biomes = list(available_biomes)
+        saved_biomes = [name for name in saved_biomes if name in available_biomes]
+        st.session_state["selected_scene_biomes"] = saved_biomes
+
     selected_biomes = st.multiselect(
         "Биомы комнат для генерации сцены",
         options=available_biomes,
-        default=default_biome_selection,
+        key="selected_scene_biomes",
         help=(
             "Выберите типы комнат, которые нужно использовать при генерации. "
             "Если workshop не выбран, он будет добавлен автоматически как базовая техническая зона. "
             "При ручном выборе биомов доля workshop уменьшается до минимума, чтобы чаще встречались выбранные типы."
         ),
     )
-    st.session_state["selected_scene_biomes"] = list(selected_biomes)
 
-    if st.button("Сгенерировать промышленную сцену и облако точек"):
-        if not selected_biomes:
-            st.error("Выберите хотя бы один биом комнаты перед генерацией.")
-        else:
-            with st.spinner("Генерация промышленной сцены и LiDAR-облака..."):
+    generation_params = {
+        "seed": int(gen_seed),
+        "factory_width": float(factory_width),
+        "factory_depth": float(factory_depth),
+        "room_count": int(room_count),
+        "room_height": float(room_height),
+        "selected_biomes": list(selected_biomes),
+    }
+
+    step_col_1, step_col_2 = st.columns(2)
+    with step_col_1:
+        if st.button("1) Сгенерировать OBJ сцены (без LiDAR)"):
+            if not selected_biomes:
+                st.error("Выберите хотя бы один биом комнаты перед генерацией.")
+            else:
+                with st.spinner("Генерация OBJ промышленной сцены..."):
+                    preview_result = generate_factory_scene_preview(
+                        output_root=output_root,
+                        seed=generation_params["seed"],
+                        factory_width=generation_params["factory_width"],
+                        factory_depth=generation_params["factory_depth"],
+                        room_count=generation_params["room_count"],
+                        room_height=generation_params["room_height"],
+                        selected_biomes=generation_params["selected_biomes"],
+                    )
+
+                st.session_state["scene_preview_state"] = {
+                    "source": "preview",
+                    "scene_obj_path": preview_result.scene_obj_path,
+                    "metadata_path": preview_result.metadata_path,
+                    "output_dir": preview_result.output_dir,
+                    "rooms": preview_result.rooms,
+                    "room_index_lookup": preview_result.room_index_lookup,
+                    "notes": preview_result.notes,
+                    "requested_biomes": list(selected_biomes),
+                    "effective_biomes": sorted(
+                        {str(room.biome).strip().lower() for room in preview_result.rooms}
+                    ),
+                    "generation_params": generation_params,
+                }
+                st.session_state["factory_state"] = None
+                st.session_state["placement_state"] = None
+                st.success("OBJ сцены готов. Проверьте предпросмотр и запускайте шаг 2.")
+
+    preview_ready = bool(
+        st.session_state.get("scene_preview_state")
+        and st.session_state["scene_preview_state"].get("scene_obj_path")
+    )
+    with step_col_2:
+        if st.button(
+            "2) Получить облако точек по этой сцене",
+            disabled=not preview_ready,
+        ):
+            preview_state_payload = st.session_state.get("scene_preview_state", {})
+            preview_params = dict(preview_state_payload.get("generation_params", generation_params))
+            with st.spinner("Генерация LiDAR-облака по выбранной сцене..."):
                 result = generate_factory_cloud(
                     output_root=output_root,
-                    seed=int(gen_seed),
-                    factory_width=float(factory_width),
-                    factory_depth=float(factory_depth),
-                    room_count=int(room_count),
-                    room_height=float(room_height),
+                    seed=int(preview_params.get("seed", generation_params["seed"])),
+                    factory_width=float(preview_params.get("factory_width", generation_params["factory_width"])),
+                    factory_depth=float(preview_params.get("factory_depth", generation_params["factory_depth"])),
+                    room_count=int(preview_params.get("room_count", generation_params["room_count"])),
+                    room_height=float(preview_params.get("room_height", generation_params["room_height"])),
                     lidar_density=float(lidar_density),
                     use_lasersensing=bool(use_lasersensing),
-                    selected_biomes=list(selected_biomes),
+                    selected_biomes=list(preview_params.get("selected_biomes", generation_params["selected_biomes"])),
                 )
             st.session_state["factory_state"] = {
                 "source": "generated",
@@ -508,10 +570,13 @@ with tab_gen:
                 "scene_obj_path": result.scene_obj_path,
                 "output_dir": result.output_dir,
                 "notes": result.notes,
-                "requested_biomes": list(selected_biomes),
+                "requested_biomes": list(preview_params.get("selected_biomes", [])),
                 "effective_biomes": sorted({str(room.biome).strip().lower() for room in result.rooms}),
             }
-            st.success("Промышленная сцена успешно сгенерирована.")
+            st.success("Облако точек успешно получено для выбранной сцены.")
+
+    if not preview_ready:
+        st.info("Сначала выполните шаг 1: сгенерируйте и проверьте OBJ-сцену.")
 
 with tab_load:
     cloud_path = st.text_input("Путь к облаку точек промышленной сцены (.ply)", value="")
@@ -563,6 +628,7 @@ with tab_load:
             "requested_biomes": requested_biomes,
             "effective_biomes": effective_biomes,
         }
+        st.session_state["scene_preview_state"] = None
         st.success("Готовая промышленная сцена загружена.")
 
 factory_state = st.session_state.get("factory_state")

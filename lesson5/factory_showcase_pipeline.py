@@ -167,6 +167,17 @@ class FactoryCloudResult:
 
 
 @dataclass
+class FactoryScenePreviewResult:
+    run_id: str
+    output_dir: str
+    rooms: list[RoomInfo]
+    room_index_lookup: dict[str, int]
+    notes: list[str]
+    scene_obj_path: str
+    metadata_path: str
+
+
+@dataclass
 class PlacementResult:
     run_id: str
     output_dir: str
@@ -1018,6 +1029,90 @@ def generate_factory_cloud(
         factory_cloud_path=factory_cloud_path,
         metadata_path=str(metadata_path),
         scene_obj_path=scene_obj_path,
+    )
+
+
+def generate_factory_scene_preview(
+    *,
+    output_root: str | Path | None = None,
+    seed: int = 42,
+    factory_width: float = 120.0,
+    factory_depth: float = 90.0,
+    room_count: int = 9,
+    room_height: float = 6.0,
+    selected_biomes: list[str] | None = None,
+) -> FactoryScenePreviewResult:
+    _ensure_synthetic_factory_available()
+    requested_biomes = _normalize_biome_selection(selected_biomes)
+    effective_biome_cycle, _ = _resolve_biome_cycle(selected_biomes)
+    notes: list[str] = []
+    if requested_biomes and "workshop" not in requested_biomes and "workshop" in effective_biome_cycle:
+        notes.append("Биом workshop добавлен автоматически как базовая техническая зона.")
+
+    _, layout, scene = _build_factory_scene(
+        seed=int(seed),
+        factory_width=factory_width,
+        factory_depth=factory_depth,
+        room_count=room_count,
+        room_height=room_height,
+        selected_biomes=selected_biomes,
+    )
+    rooms = _layout_to_rooms(layout, room_height=room_height)
+    room_index_lookup = {room.room_id: index for index, room in enumerate(rooms)}
+
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = (
+        Path(output_root)
+        if output_root is not None
+        else (Path(__file__).resolve().parent / "factory_demo_runs" / run_id)
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    scene_obj_path = ""
+    if ObjExporter is not None:
+        try:
+            obj_path = output_dir / "industrial_scene.obj"
+            ObjExporter().export(scene, str(obj_path))
+            scene_obj_path = str(obj_path)
+        except Exception as obj_error:
+            notes.append(f"Не удалось экспортировать OBJ промышленной сцены: {obj_error}")
+    else:
+        notes.append("Экспорт OBJ недоступен: модуль synthetic_factory не инициализирован.")
+
+    metadata = {
+        "run_id": run_id,
+        "seed": int(seed),
+        "requested_biomes": requested_biomes,
+        "effective_biome_cycle": effective_biome_cycle,
+        "rooms": [
+            {
+                "room_id": room.room_id,
+                "biome": room.biome,
+                "center_x": room.center_x,
+                "center_y": room.center_y,
+                "width": room.width,
+                "depth": room.depth,
+                "floor_z": room.floor_z,
+                "ceiling_z": room.ceiling_z,
+            }
+            for room in rooms
+        ],
+        "room_index_lookup": room_index_lookup,
+        "scene_obj_path": scene_obj_path,
+        "notes": notes,
+        "preview_only": True,
+    }
+    metadata_path = output_dir / "factory_scene_metadata.json"
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return FactoryScenePreviewResult(
+        run_id=run_id,
+        output_dir=str(output_dir),
+        rooms=rooms,
+        room_index_lookup=room_index_lookup,
+        notes=notes,
+        scene_obj_path=scene_obj_path,
+        metadata_path=str(metadata_path),
     )
 
 
