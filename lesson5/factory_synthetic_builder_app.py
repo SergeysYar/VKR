@@ -154,12 +154,56 @@ def _load_obj_preview_mesh(
         raise ValueError("В OBJ не найдено валидных граней после проверки индексов.")
     face_objects_np = np.asarray(valid_face_objects, dtype=object)
 
-    if max_faces > 0 and len(faces_np) > max_faces:
-        step = max(1, len(faces_np) // max_faces)
-        faces_np = faces_np[::step]
-        face_objects_np = face_objects_np[::step]
-
     return vertices_np, faces_np, face_objects_np
+
+
+def _uniform_sample_indices(total: int, limit: int) -> np.ndarray:
+    if total <= 0 or limit <= 0:
+        return np.zeros((0,), dtype=np.int64)
+    if total <= limit:
+        return np.arange(total, dtype=np.int64)
+    return np.linspace(0, total - 1, num=limit, dtype=np.int64)
+
+
+def _downsample_face_block(faces_block: np.ndarray, limit: int) -> np.ndarray:
+    if limit <= 0 or len(faces_block) == 0:
+        return np.zeros((0, 3), dtype=np.int32)
+    if len(faces_block) <= limit:
+        return faces_block
+    picked = _uniform_sample_indices(len(faces_block), limit)
+    return faces_block[picked]
+
+
+def _balanced_downsample_faces(
+    faces: np.ndarray,
+    shell_mask: np.ndarray,
+    max_faces: int,
+    *,
+    content_share: float = 0.62,
+) -> np.ndarray:
+    if max_faces <= 0 or len(faces) <= max_faces:
+        return faces
+
+    content_faces = faces[~shell_mask]
+    shell_faces = faces[shell_mask]
+    if len(content_faces) == 0 or len(shell_faces) == 0:
+        return _downsample_face_block(faces, max_faces)
+
+    content_limit = int(round(max_faces * max(0.2, min(0.9, float(content_share)))))
+    content_limit = max(1, min(content_limit, max_faces - 1))
+    content_limit = min(content_limit, len(content_faces))
+    shell_limit = max_faces - content_limit
+    if shell_limit <= 0:
+        shell_limit = 1
+        content_limit = max(1, max_faces - shell_limit)
+
+    sampled_content = _downsample_face_block(content_faces, content_limit)
+    sampled_shell = _downsample_face_block(shell_faces, shell_limit)
+    if len(sampled_content) == 0:
+        return sampled_shell
+    if len(sampled_shell) == 0:
+        return sampled_content
+    return np.concatenate([sampled_content, sampled_shell], axis=0)
 
 
 def _is_shell_like_object_name(name: str) -> bool:
@@ -193,11 +237,10 @@ def _build_obj_figure(
     vertices, faces, face_objects = _load_obj_preview_mesh(obj_path, max_faces=max_faces)
     shell_mask = np.array([_is_shell_like_object_name(name) for name in face_objects], dtype=bool)
 
-    filtered_faces = faces
+    render_faces = faces
     if preview_mode == "content_only":
-        keep_mask = ~shell_mask
-        if np.any(keep_mask):
-            filtered_faces = faces[keep_mask]
+        keep_faces = faces[~shell_mask]
+        render_faces = _downsample_face_block(keep_faces, int(max_faces))
     elif preview_mode == "cutaway":
         z_values = vertices[:, 2]
         z_cut = float(np.quantile(z_values, 0.62))
@@ -205,13 +248,35 @@ def _build_obj_figure(
             z_values[faces[:, 0]] + z_values[faces[:, 1]] + z_values[faces[:, 2]]
         ) / 3.0
         keep_mask = face_center_z <= z_cut
-        if np.any(keep_mask):
-            filtered_faces = faces[keep_mask]
+        keep_faces = faces[keep_mask] if np.any(keep_mask) else faces
+        render_faces = _downsample_face_block(keep_faces, int(max_faces))
+    elif preview_mode == "full":
+        render_faces = _balanced_downsample_faces(
+            faces,
+            shell_mask=shell_mask,
+            max_faces=int(max_faces),
+            content_share=0.68,
+        )
 
     fig = go.Figure()
-    if preview_mode == "xray":
-        shell_faces = faces[shell_mask] if np.any(shell_mask) else np.zeros((0, 3), dtype=np.int32)
-        content_faces = faces[~shell_mask] if np.any(~shell_mask) else faces
+    shell_faces = np.zeros((0, 3), dtype=np.int32)
+    content_faces = np.zeros((0, 3), dtype=np.int32)
+
+    if preview_mode in {"xray", "full"}:
+        content_source = faces[~shell_mask] if np.any(~shell_mask) else faces
+        shell_source = faces[shell_mask] if np.any(shell_mask) else np.zeros((0, 3), dtype=np.int32)
+
+        if max_faces > 0:
+            content_ratio = 0.75 if preview_mode == "xray" else 0.72
+            content_limit = max(1, int(round(max_faces * content_ratio)))
+            shell_limit = max(1, int(max_faces - content_limit))
+            content_faces = _downsample_face_block(content_source, content_limit)
+            shell_faces = _downsample_face_block(shell_source, shell_limit)
+        else:
+            content_faces = content_source
+            shell_faces = shell_source
+
+        shell_opacity = 0.03 if preview_mode == "xray" else 0.18
         if len(shell_faces) > 0:
             fig.add_trace(
                 go.Mesh3d(
@@ -221,19 +286,20 @@ def _build_obj_figure(
                     i=shell_faces[:, 0],
                     j=shell_faces[:, 1],
                     k=shell_faces[:, 2],
-                    color="#94A3B8",
+                    color="#A8B3C2",
                     flatshading=True,
-                    opacity=0.08,
+                    opacity=shell_opacity,
                     lighting={
-                        "ambient": 0.45,
-                        "diffuse": 0.9,
-                        "specular": 0.15,
-                        "roughness": 0.8,
+                        "ambient": 0.28,
+                        "diffuse": 0.52,
+                        "specular": 0.0,
+                        "roughness": 1.0,
                     },
                     name="Оболочка",
                     showscale=False,
                 )
             )
+
         if len(content_faces) > 0:
             fig.add_trace(
                 go.Mesh3d(
@@ -243,36 +309,56 @@ def _build_obj_figure(
                     i=content_faces[:, 0],
                     j=content_faces[:, 1],
                     k=content_faces[:, 2],
-                    color="#2563EB",
+                    color="#8A8F99",
                     flatshading=True,
-                    opacity=0.95,
+                    opacity=1.0,
                     lighting={
-                        "ambient": 0.45,
-                        "diffuse": 0.9,
-                        "specular": 0.2,
-                        "roughness": 0.6,
+                        "ambient": 0.9,
+                        "diffuse": 0.45,
+                        "specular": 0.0,
+                        "roughness": 1.0,
                     },
                     name="Наполнение",
                     showscale=False,
                 )
             )
+    elif preview_mode == "content_only":
+        fig.add_trace(
+            go.Mesh3d(
+                x=vertices[:, 0],
+                y=vertices[:, 1],
+                z=vertices[:, 2],
+                i=render_faces[:, 0],
+                j=render_faces[:, 1],
+                k=render_faces[:, 2],
+                color="#8A8F99",
+                flatshading=True,
+                opacity=1.0,
+                lighting={
+                    "ambient": 0.9,
+                    "diffuse": 0.45,
+                    "specular": 0.0,
+                    "roughness": 1.0,
+                },
+            )
+        )
     else:
         fig.add_trace(
             go.Mesh3d(
                 x=vertices[:, 0],
                 y=vertices[:, 1],
                 z=vertices[:, 2],
-                i=filtered_faces[:, 0],
-                j=filtered_faces[:, 1],
-                k=filtered_faces[:, 2],
-                color="#9CAEC4",
+                i=render_faces[:, 0],
+                j=render_faces[:, 1],
+                k=render_faces[:, 2],
+                color="#4B83D5",
                 flatshading=True,
-                opacity=0.95,
+                opacity=0.98,
                 lighting={
-                    "ambient": 0.45,
-                    "diffuse": 0.9,
-                    "specular": 0.2,
-                    "roughness": 0.6,
+                    "ambient": 0.72,
+                    "diffuse": 0.48,
+                    "specular": 0.0,
+                    "roughness": 1.0,
                 },
             )
         )
@@ -288,7 +374,10 @@ def _build_obj_figure(
         },
     )
 
-    displayed_faces = len(faces) if preview_mode == "xray" else len(filtered_faces)
+    if preview_mode in {"xray", "full"}:
+        displayed_faces = int(len(shell_faces) + len(content_faces))
+    else:
+        displayed_faces = int(len(render_faces))
     return fig, int(len(vertices)), int(displayed_faces)
 
 
@@ -422,7 +511,7 @@ if obj_preview_state is not None:
             selected_preview_label = st.selectbox(
                 "Режим предпросмотра OBJ",
                 options=list(preview_options.keys()),
-                index=3,
+                index=1,
             )
         with col_faces:
             max_faces_preview = st.slider(
@@ -464,11 +553,13 @@ with tab_gen:
         lidar_density = st.slider(
             "Плотность облака LiDAR",
             min_value=0.25,
-            max_value=3.0,
+            max_value=8.0,
             value=1.0,
             step=0.25,
         )
-        st.write("1.0 = базовая плотность, >1.0 плотнее, <1.0 реже")
+        st.write("1.0 = базовая плотность, 2-4 = плотное сканирование, 5-8 = сверхплотное (дольше и тяжелее)")
+        if lidar_density > 4.0:
+            st.warning("Сверхплотный режим: генерация может занять больше времени и памяти.")
 
     available_biomes = get_available_scene_biomes()
     if "selected_scene_biomes" not in st.session_state:
@@ -826,4 +917,5 @@ if placement_state is not None:
             st.error(f"Ошибка сохранения комбинированного облака: {export_error}")
         else:
             st.success(f"Комбинированное облако сохранено: {saved_path}")
+
 

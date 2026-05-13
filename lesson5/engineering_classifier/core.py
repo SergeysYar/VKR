@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -14,7 +15,29 @@ from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from torch.utils.data import DataLoader, Dataset
 
 from dataset import load_ply_file, normalize_point_cloud
-from model import PointNetSegmentationLightning
+
+
+def _load_local_pointnet_lightning() -> type:
+    model_path = Path(__file__).resolve().parents[1] / "model.py"
+    if not model_path.exists():
+        raise ImportError(f"Local model.py was not found: {model_path}")
+
+    spec = importlib.util.spec_from_file_location("lesson5_local_model", str(model_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot create import spec for: {model_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    pointnet_class = getattr(module, "PointNetSegmentationLightning", None)
+    if pointnet_class is None:
+        raise ImportError(
+            f"PointNetSegmentationLightning is missing in local module: {model_path}"
+        )
+    return pointnet_class
+
+
+PointNetSegmentationLightning = _load_local_pointnet_lightning()
 
 StatusCallback = Callable[[str], None]
 

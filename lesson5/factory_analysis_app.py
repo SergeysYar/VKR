@@ -200,6 +200,56 @@ def _find_auto_weights(weights_root: Path, object_class: str) -> str:
     return latest or ""
 
 
+def _save_uploaded_input_file(
+    uploaded_file,
+    *,
+    output_root: str | Path,
+    prefix: str,
+    fallback_suffix: str | None = None,
+) -> str:
+    if uploaded_file is None:
+        return ""
+
+    upload_dir = Path(output_root) / "uploaded_inputs"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    original_name = Path(str(getattr(uploaded_file, "name", "") or "uploaded_file")).name
+    safe_name = "".join(
+        char if (char.isalnum() or char in {"_", "-", "."}) else "_"
+        for char in original_name
+    ) or "uploaded_file"
+
+    suffix = Path(safe_name).suffix
+    if not suffix and fallback_suffix:
+        safe_name = f"{safe_name}{fallback_suffix}"
+
+    target_path = upload_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{prefix}_{safe_name}"
+    target_path.write_bytes(uploaded_file.getbuffer())
+    return str(target_path.resolve())
+
+
+def _resolve_file_input(
+    *,
+    path_value: str,
+    uploaded_file,
+    output_root: str | Path,
+    prefix: str,
+    session_key: str | None = None,
+    fallback_suffix: str | None = None,
+) -> str:
+    if uploaded_file is not None:
+        saved_path = _save_uploaded_input_file(
+            uploaded_file,
+            output_root=output_root,
+            prefix=prefix,
+            fallback_suffix=fallback_suffix,
+        )
+        if session_key:
+            st.session_state[session_key] = saved_path
+        return saved_path
+    return sanitize_filesystem_path(path_value)
+
+
 def _ensure_state() -> None:
     st.session_state.setdefault("analysis_cloud_state", None)
     st.session_state.setdefault("recognition_state", None)
@@ -242,6 +292,11 @@ if demo_mode_enabled:
         value="",
         key="demo_cloud_path",
     )
+    uploaded_demo_cloud = st.file_uploader(
+        "Или выберите облако для демо через диалог",
+        type=["ply"],
+        key="demo_cloud_upload",
+    )
     demo_object_class = st.text_input(
         "Тип объекта для демо",
         value="valve",
@@ -264,6 +319,11 @@ if demo_mode_enabled:
         value="",
         key="demo_surface_ckpt",
     )
+    uploaded_demo_surface_ckpt = st.file_uploader(
+        "Или выберите checkpoint SurfaceReconstructor для демо",
+        type=["ckpt"],
+        key="demo_surface_ckpt_upload",
+    )
     demo_clear_prev = st.checkbox(
         "Очистить предыдущий демо-результат перед запуском",
         value=False,
@@ -272,9 +332,24 @@ if demo_mode_enabled:
 
     if st.button("Запустить демо-сценарий 'идеальная работа'"):
         try:
-            demo_path_clean = sanitize_filesystem_path(demo_cloud_path)
+            demo_path_clean = _resolve_file_input(
+                path_value=demo_cloud_path,
+                uploaded_file=uploaded_demo_cloud,
+                output_root=output_root,
+                prefix="demo_cloud",
+                session_key="demo_cloud_path",
+                fallback_suffix=".ply",
+            )
             if not demo_path_clean:
                 raise ValueError("Укажите путь к заранее размеченному облаку.")
+            demo_surface_ckpt_path = _resolve_file_input(
+                path_value=demo_surface_ckpt,
+                uploaded_file=uploaded_demo_surface_ckpt,
+                output_root=output_root,
+                prefix="demo_surface_ckpt",
+                session_key="demo_surface_ckpt",
+                fallback_suffix=".ckpt",
+            )
             points, labels = load_point_cloud_file(demo_path_clean)
             object_class_name = demo_object_class.strip() or "valve"
             object_id = f"{object_class_name}_demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -299,7 +374,7 @@ if demo_mode_enabled:
                     output_dir=demo_output_dir,
                     min_points_per_part=int(demo_min_points_part),
                     prefer_surface_module=bool(demo_prefer_surface_module),
-                    checkpoint_path=demo_surface_ckpt.strip() or None,
+                    checkpoint_path=demo_surface_ckpt_path or None,
                 )
                 obj_export = export_reconstruction_obj(
                     reconstruction,
@@ -405,10 +480,25 @@ else:
     st.session_state.pop("demo_mode_state", None)
 
 st.markdown("## 1) Загрузка готового облака для анализа")
-analysis_cloud_path = st.text_input("Путь к облаку точки (.ply)", value="")
+analysis_cloud_path = st.text_input("Путь к облаку точки (.ply)", value="", key="analysis_cloud_path_input")
+uploaded_analysis_cloud = st.file_uploader(
+    "Или выберите файл облака через диалог",
+    type=["ply"],
+    key="analysis_cloud_upload",
+)
 if st.button("Загрузить облако для анализа"):
     try:
-        analysis_cloud_path_clean = sanitize_filesystem_path(analysis_cloud_path)
+        analysis_cloud_path_clean = _resolve_file_input(
+            path_value=analysis_cloud_path,
+            uploaded_file=uploaded_analysis_cloud,
+            output_root=output_root,
+            prefix="analysis_cloud",
+            session_key="analysis_cloud_path_input",
+            fallback_suffix=".ply",
+        )
+        if not analysis_cloud_path_clean:
+            raise ValueError("Укажите путь к .ply или выберите файл через диалог.")
+
         points, labels = load_point_cloud_file(analysis_cloud_path_clean)
     except Exception as load_error:
         st.error(f"Ошибка загрузки облака: {load_error}")
@@ -456,12 +546,25 @@ if auto_recognition_ckpt:
 recognition_ckpt = st.text_input(
     "Путь к весам модели распознавания (.ckpt, можно оставить пустым для авто)",
     value="",
+    key="recognition_ckpt_input",
+)
+uploaded_recognition_ckpt = st.file_uploader(
+    "Или выберите checkpoint распознавания",
+    type=["ckpt"],
+    key="recognition_ckpt_upload",
 )
 recognition_points = st.number_input("Точек на инференс", min_value=256, value=4096, step=256)
 
 if st.button("Запустить распознавание объектов в облаке"):
     cloud = st.session_state.get("analysis_cloud_state")
-    recognition_ckpt_path = recognition_ckpt.strip() or auto_recognition_ckpt
+    recognition_ckpt_path = _resolve_file_input(
+        path_value=recognition_ckpt,
+        uploaded_file=uploaded_recognition_ckpt,
+        output_root=output_root,
+        prefix="recognition_ckpt",
+        session_key="recognition_ckpt_input",
+        fallback_suffix=".ckpt",
+    ) or auto_recognition_ckpt
     if cloud is None:
         st.error("Сначала загрузите облако для анализа.")
     elif not recognition_ckpt_path:
@@ -688,7 +791,16 @@ if segmentation_finetune_state is not None:
 
 obj_col1, obj_col2 = st.columns(2)
 with obj_col1:
-    seg_object_cloud_path = st.text_input("Путь к облаку объекта для сегментации (.ply)", value="")
+    seg_object_cloud_path = st.text_input(
+        "Путь к облаку объекта для сегментации (.ply)",
+        value="",
+        key="seg_object_cloud_path_input",
+    )
+    uploaded_seg_object_cloud = st.file_uploader(
+        "Или выберите облако объекта для сегментации",
+        type=["ply"],
+        key="seg_object_cloud_upload",
+    )
 with obj_col2:
     seg_object_class = st.text_input("Тип объекта", value="valve")
 
@@ -698,11 +810,31 @@ if auto_seg_ckpt:
 seg_ckpt_input = st.text_input(
     "Путь к весам сегментации (.ckpt, можно оставить пустым для авто)",
     value="",
+    key="seg_ckpt_input_path",
+)
+uploaded_seg_ckpt = st.file_uploader(
+    "Или выберите checkpoint сегментации",
+    type=["ckpt"],
+    key="seg_ckpt_upload",
 )
 
 if st.button("Запустить сегментацию объекта"):
-    ckpt_path = seg_ckpt_input.strip() or auto_seg_ckpt
-    seg_object_cloud_path_clean = sanitize_filesystem_path(seg_object_cloud_path)
+    ckpt_path = _resolve_file_input(
+        path_value=seg_ckpt_input,
+        uploaded_file=uploaded_seg_ckpt,
+        output_root=output_root,
+        prefix="segmentation_ckpt",
+        session_key="seg_ckpt_input_path",
+        fallback_suffix=".ckpt",
+    ) or auto_seg_ckpt
+    seg_object_cloud_path_clean = _resolve_file_input(
+        path_value=seg_object_cloud_path,
+        uploaded_file=uploaded_seg_object_cloud,
+        output_root=output_root,
+        prefix="seg_object_cloud",
+        session_key="seg_object_cloud_path_input",
+        fallback_suffix=".ply",
+    )
     if not seg_object_cloud_path_clean:
         st.error("Укажите путь к облаку объекта.")
     else:
@@ -766,9 +898,26 @@ else:
     with rc2:
         prefer_surface_module = st.checkbox("Предпочесть SurfaceReconstructor.py", value=True)
     with rc3:
-        surface_ckpt = st.text_input("Checkpoint для SurfaceReconstructor (опционально)", value="")
+        surface_ckpt = st.text_input(
+            "Checkpoint для SurfaceReconstructor (опционально)",
+            value="",
+            key="surface_ckpt_input",
+        )
+        uploaded_surface_ckpt = st.file_uploader(
+            "Или выберите checkpoint SurfaceReconstructor",
+            type=["ckpt"],
+            key="surface_ckpt_upload",
+        )
 
     if st.button("Запустить восстановление поверхности"):
+        surface_ckpt_path = _resolve_file_input(
+            path_value=surface_ckpt,
+            uploaded_file=uploaded_surface_ckpt,
+            output_root=output_root,
+            prefix="surface_reconstructor_ckpt",
+            session_key="surface_ckpt_input",
+            fallback_suffix=".ckpt",
+        )
         with st.spinner("Восстановление поверхности выполняется..."):
             reconstruction = reconstruct_object_surfaces(
                 object_id=segmentation_state["object_id"],
@@ -776,7 +925,7 @@ else:
                 output_dir=Path(output_root) / "reconstruction" / segmentation_state["object_id"],
                 min_points_per_part=int(min_points_part),
                 prefer_surface_module=bool(prefer_surface_module),
-                checkpoint_path=surface_ckpt.strip() or None,
+                checkpoint_path=surface_ckpt_path or None,
             )
         st.session_state["reconstruction_state"] = reconstruction
         st.success("Восстановление завершено.")

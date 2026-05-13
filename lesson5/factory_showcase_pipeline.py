@@ -463,13 +463,26 @@ def _layout_to_rooms(layout: Iterable[Any], room_height: float) -> list[RoomInfo
 
 def _default_lidar_settings(seed: int, density_factor: float = 1.0) -> dict[str, Any]:
     density = max(0.2, float(density_factor))
-    points_per_station = max(4000, int(round(38000 * density)))
-    point_multiplier = max(1, int(round(2.0 * density)))
-    exterior_density = min(1.0, max(0.05, 0.3 * density))
+    effective_density = min(10.0, density)
+
+    # Higher density tightens scan angular steps and increases per-station samples.
+    density_sqrt = max(0.45, math.sqrt(effective_density))
+    angular_resolution = max(0.35, 1.5 / density_sqrt)
+    vertical_resolution = max(1.8, 8.0 / density_sqrt)
+
+    boost = 1.0 + max(0.0, effective_density - 1.0) * 0.25
+    points_per_station = max(4000, int(round(38000 * effective_density * boost)))
+    point_multiplier = max(1, int(round(2.0 * effective_density)))
+    exterior_density = min(1.0, max(0.05, 0.3 * effective_density))
+
+    station_bonus = int(max(0.0, effective_density - 1.0) * 1.2)
+    max_stations_per_room = min(12, 5 + station_bonus)
+    max_stations = min(96, 42 + station_bonus * 6)
+
     return {
         "scan_range": 26.0,
-        "angular_resolution_deg": 1.5,
-        "vertical_resolution_deg": 8.0,
+        "angular_resolution_deg": angular_resolution,
+        "vertical_resolution_deg": vertical_resolution,
         "vertical_fov_up_deg": 35.0,
         "vertical_fov_down_deg": 55.0,
         "sensor_height": 1.6,
@@ -486,11 +499,11 @@ def _default_lidar_settings(seed: int, density_factor: float = 1.0) -> dict[str,
         "point_jitter": 0.0065,
         "exterior_point_density_factor": exterior_density,
         "points_per_station": points_per_station,
-        "max_stations_per_room": 5,
-        "max_stations": 42,
+        "max_stations_per_room": max_stations_per_room,
+        "max_stations": max_stations,
         "coverage_grid_step": 2.8,
         "coverage_wall_step": 4.0,
-        "coverage_max_targets": 1600,
+        "coverage_max_targets": int(min(7000, 1600 + max(0.0, effective_density - 1.0) * 900)),
         "optimize_raycasts": True,
         "raycast_cell_size": 2.1,
         "raycast_march_step": 1.2,
