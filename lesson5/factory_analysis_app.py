@@ -245,7 +245,7 @@ def _resolve_file_input(
             fallback_suffix=fallback_suffix,
         )
         if session_key:
-            st.session_state[session_key] = saved_path
+            st.session_state[f"{session_key}__resolved_path"] = saved_path
         return saved_path
     return sanitize_filesystem_path(path_value)
 
@@ -305,13 +305,13 @@ if demo_mode_enabled:
     demo_min_points_part = st.number_input(
         "Мин. точек на сегмент (демо)",
         min_value=10,
-        value=45,
+        value=25,
         step=5,
         key="demo_min_points_part",
     )
     demo_prefer_surface_module = st.checkbox(
         "Предпочесть SurfaceReconstructor в демо",
-        value=False,
+        value=True,
         key="demo_prefer_surface_module",
     )
     st.caption("Демо-сценарий работает без весов .ckpt.")
@@ -422,7 +422,7 @@ if demo_mode_enabled:
             use_container_width=True,
         )
 
-        st.markdown("#### Шаг 2. Сегментация (показываем заранее размеченные сегменты)")
+        st.markdown("#### Шаг 2. Сегментация")
         st.plotly_chart(
             _build_cloud_figure(
                 demo_mode_state["classification"].points,
@@ -895,7 +895,7 @@ else:
     with rc1:
         min_points_part = st.number_input("Минимум точек на часть", min_value=10, value=45, step=5)
     with rc2:
-        prefer_surface_module = st.checkbox("Предпочесть SurfaceReconstructor.py", value=True)
+        prefer_surface_module = st.checkbox("Предпочесть SurfaceReconstructor.py", value=False)
     with rc3:
         surface_ckpt = st.text_input(
             "Checkpoint для SurfaceReconstructor (опционально)",

@@ -2141,6 +2141,101 @@ def _write_obj_vertices_only(path: Path, points: np.ndarray) -> str:
     return str(path)
 
 
+def _build_mesh_from_points(points: np.ndarray):
+    try:
+        import open3d as o3d  # type: ignore
+    except Exception:
+        return None
+
+    if points is None or len(points) < 80:
+        return None
+
+    pts = points.astype(np.float32, copy=False)
+    if len(pts) > 120000:
+        idx = np.linspace(0, len(pts) - 1, num=120000, dtype=np.int64)
+        pts = pts[idx]
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts.astype(np.float64))
+
+    try:
+        pcd = pcd.voxel_down_sample(voxel_size=max(1e-4, float(np.ptp(pts, axis=0).max()) / 220.0))
+    except Exception:
+        pass
+
+    if len(pcd.points) < 80:
+        return None
+
+    try:
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
+    except Exception:
+        return None
+
+    try:
+        pcd.orient_normals_consistent_tangent_plane(16)
+    except Exception:
+        pass
+
+    mean_dist = 1.0
+    try:
+        distances = np.asarray(pcd.compute_nearest_neighbor_distance())
+        if len(distances) > 0:
+            mean_dist = float(np.clip(np.mean(distances), 1e-5, 1e6))
+    except Exception:
+        pass
+
+    mesh = None
+    try:
+        radii = o3d.utility.DoubleVector([mean_dist * 1.1, mean_dist * 2.0, mean_dist * 3.0])
+        candidate = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd, radii)
+        if len(candidate.vertices) > 0 and len(candidate.triangles) > 0:
+            mesh = candidate
+    except Exception:
+        mesh = None
+
+    if mesh is None:
+        for alpha_factor in (2.0, 3.0, 4.0):
+            try:
+                candidate = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(
+                    pcd, mean_dist * alpha_factor
+                )
+                if len(candidate.vertices) > 0 and len(candidate.triangles) > 0:
+                    mesh = candidate
+                    break
+            except Exception:
+                continue
+
+    if mesh is None:
+        try:
+            candidate, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=8)
+            bbox = pcd.get_axis_aligned_bounding_box().scale(1.03, pcd.get_center())
+            candidate = candidate.crop(bbox)
+            if len(candidate.vertices) > 0 and len(candidate.triangles) > 0:
+                mesh = candidate
+        except Exception:
+            mesh = None
+
+    if mesh is None:
+        return None
+
+    try:
+        mesh.remove_degenerate_triangles()
+        mesh.remove_duplicated_triangles()
+        mesh.remove_duplicated_vertices()
+        mesh.remove_unreferenced_vertices()
+        if len(mesh.triangles) > 150000:
+            target = max(50000, int(len(mesh.triangles) * 0.55))
+            coarse = mesh.simplify_quadric_decimation(target)
+            if len(coarse.vertices) > 0 and len(coarse.triangles) > 0:
+                mesh = coarse
+    except Exception:
+        pass
+
+    if len(mesh.vertices) == 0 or len(mesh.triangles) == 0:
+        return None
+    return mesh
+
+
 def export_reconstruction_obj(
     reconstruction: ReconstructionResult,
     *,
@@ -2162,6 +2257,7 @@ def export_reconstruction_obj(
         if str(item).lower().endswith(".ply") and "_mesh" in Path(item).name.lower()
     ]
     mesh_created = False
+    mode = "points_only"
     mesh_error: str | None = None
 
     try:
@@ -2186,6 +2282,7 @@ def export_reconstruction_obj(
             merged_mesh.remove_unreferenced_vertices()
             o3d.io.write_triangle_mesh(str(target), merged_mesh, write_triangle_uvs=False)
             mesh_created = True
+            mode = "mesh"
     except Exception as error:
         mesh_error = str(error)
 
@@ -2193,11 +2290,24 @@ def export_reconstruction_obj(
         points = reconstruction.combined_points.astype(np.float32, copy=False)
         if len(points) == 0:
             raise ValueError("Нет восстановленных точек для экспорта OBJ.")
-        _write_obj_vertices_only(target, points)
+        mesh = _build_mesh_from_points(points)
+        if mesh is not None:
+            try:
+                import open3d as o3d  # type: ignore
+
+                o3d.io.write_triangle_mesh(str(target), mesh, write_triangle_uvs=False)
+                mesh_created = True
+                mode = "mesh_from_points"
+            except Exception as mesh_from_points_error:
+                mesh_error = str(mesh_from_points_error)
+
+        if not mesh_created:
+            _write_obj_vertices_only(target, points)
+            mode = "points_only"
 
     return {
         "obj_path": str(target),
-        "mode": "mesh" if mesh_created else "points_only",
+        "mode": mode,
         "mesh_error": mesh_error,
     }
 
@@ -2234,25 +2344,53 @@ def _orthonormal_basis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return u, v
 
 
+def _voxel_downsample_points(points: np.ndarray, target_points: int) -> np.ndarray:
+    if len(points) <= max(1, int(target_points)):
+        return points.astype(np.float32, copy=True)
+
+    min_corner = points.min(axis=0)
+    max_corner = points.max(axis=0)
+    span = np.maximum(max_corner - min_corner, 1e-6)
+    volume = float(span[0] * span[1] * span[2])
+    if volume <= 1e-12:
+        indices = np.linspace(0, len(points) - 1, num=max(1, int(target_points)), dtype=np.int64)
+        return points[indices].astype(np.float32, copy=True)
+
+    desired = max(1, int(target_points))
+    voxel_size = (volume / desired) ** (1.0 / 3.0)
+    sampled = points
+
+    for _ in range(7):
+        coords = np.floor((points - min_corner) / max(voxel_size, 1e-8)).astype(np.int32)
+        _, unique_indices = np.unique(coords, axis=0, return_index=True)
+        unique_indices = np.sort(unique_indices)
+        sampled = points[unique_indices]
+        if len(sampled) <= int(desired * 1.2):
+            break
+        voxel_size *= 1.25
+
+    if len(sampled) > desired:
+        keep_idx = np.linspace(0, len(sampled) - 1, num=desired, dtype=np.int64)
+        sampled = sampled[keep_idx]
+    return sampled.astype(np.float32, copy=False)
+
+
 def _reconstruct_flat(points: np.ndarray, resolution: int = 28) -> np.ndarray:
     centered = points - points.mean(axis=0, keepdims=True)
     _, _, vh = np.linalg.svd(centered, full_matrices=False)
     axis_u = vh[0]
     axis_v = vh[1]
+    normal = vh[2]
     center = points.mean(axis=0)
     u_proj = centered @ axis_u
     v_proj = centered @ axis_v
-    u_min, u_max = float(np.min(u_proj)), float(np.max(u_proj))
-    v_min, v_max = float(np.min(v_proj)), float(np.max(v_proj))
-    uu = np.linspace(u_min, u_max, num=resolution)
-    vv = np.linspace(v_min, v_max, num=resolution)
-    grid_u, grid_v = np.meshgrid(uu, vv)
-    reconstructed = (
-        center.reshape(1, 3)
-        + grid_u.reshape(-1, 1) * axis_u.reshape(1, 3)
-        + grid_v.reshape(-1, 1) * axis_v.reshape(1, 3)
-    )
-    return reconstructed.astype(np.float32)
+
+    projected = center.reshape(1, 3) + np.outer(u_proj, axis_u) + np.outer(v_proj, axis_v)
+    projected_centered = projected - center.reshape(1, 3)
+    projected = projected - np.outer(projected_centered @ normal, normal)
+
+    target = max(240, min(2200, int(len(points) * 0.7)))
+    return _voxel_downsample_points(projected.astype(np.float32, copy=False), target_points=target)
 
 
 def _reconstruct_cylindrical(points: np.ndarray, axial_steps: int = 32, angle_steps: int = 36) -> np.ndarray:
@@ -2268,45 +2406,66 @@ def _reconstruct_cylindrical(points: np.ndarray, axial_steps: int = 32, angle_st
         return points.astype(np.float32, copy=True)
 
     u, v = _orthonormal_basis(axis)
-    t_values = np.linspace(float(np.min(t)), float(np.max(t)), num=axial_steps)
-    angles = np.linspace(0.0, 2.0 * math.pi, num=angle_steps, endpoint=False)
+    radial_u = radial_vectors @ u
+    radial_v = radial_vectors @ v
+    angles = np.arctan2(radial_v, radial_u)
+    angles = np.where(angles < 0.0, angles + 2.0 * math.pi, angles)
+
+    t_min, t_max = float(np.min(t)), float(np.max(t))
+    t_span = max(t_max - t_min, 1e-6)
+    t_bins = np.clip(((t - t_min) / t_span) * max(1, axial_steps - 1), 0, max(0, axial_steps - 1)).astype(np.int32)
+    a_bins = np.floor((angles / (2.0 * math.pi)) * angle_steps).astype(np.int32) % max(1, angle_steps)
+
+    bucket: dict[tuple[int, int], list[float]] = {}
+    for i in range(len(points)):
+        key = (int(t_bins[i]), int(a_bins[i]))
+        if key not in bucket:
+            bucket[key] = []
+        bucket[key].append(float(radii[i]))
+
     output: list[np.ndarray] = []
-    for t_value in t_values:
+    for (t_idx, a_idx), bucket_radii in bucket.items():
+        t_value = t_min + (float(t_idx) + 0.5) / max(1.0, float(axial_steps)) * t_span
+        angle = (float(a_idx) + 0.5) / max(1.0, float(angle_steps)) * 2.0 * math.pi
+        local_radius = float(np.median(bucket_radii))
+        blended_radius = 0.7 * local_radius + 0.3 * radius
         ring_center = center + t_value * axis
-        for angle in angles:
-            point = ring_center + radius * math.cos(angle) * u + radius * math.sin(angle) * v
-            output.append(point.astype(np.float32))
-    return np.asarray(output, dtype=np.float32)
+        point = ring_center + blended_radius * math.cos(angle) * u + blended_radius * math.sin(angle) * v
+        output.append(point.astype(np.float32))
+
+    if not output:
+        return points.astype(np.float32, copy=True)
+    reconstructed = np.asarray(output, dtype=np.float32)
+    target = max(260, min(2600, int(len(points) * 0.8)))
+    return _voxel_downsample_points(reconstructed, target_points=target)
 
 
 def _reconstruct_solid(points: np.ndarray, resolution: int = 18) -> np.ndarray:
     min_corner = points.min(axis=0)
     max_corner = points.max(axis=0)
-    xs = np.linspace(float(min_corner[0]), float(max_corner[0]), num=resolution)
-    ys = np.linspace(float(min_corner[1]), float(max_corner[1]), num=resolution)
-    zs = np.linspace(float(min_corner[2]), float(max_corner[2]), num=resolution)
-
-    surface_points: list[list[float]] = []
-    for x in xs:
-        for y in ys:
-            surface_points.append([x, y, float(min_corner[2])])
-            surface_points.append([x, y, float(max_corner[2])])
-    for x in xs:
-        for z in zs:
-            surface_points.append([x, float(min_corner[1]), z])
-            surface_points.append([x, float(max_corner[1]), z])
-    for y in ys:
-        for z in zs:
-            surface_points.append([float(min_corner[0]), y, z])
-            surface_points.append([float(max_corner[0]), y, z])
-    return np.asarray(surface_points, dtype=np.float32)
+    span = np.maximum(max_corner - min_corner, 1e-6)
+    distance_to_bounds = np.stack(
+        [
+            np.abs(points[:, 0] - min_corner[0]) / span[0],
+            np.abs(points[:, 0] - max_corner[0]) / span[0],
+            np.abs(points[:, 1] - min_corner[1]) / span[1],
+            np.abs(points[:, 1] - max_corner[1]) / span[1],
+            np.abs(points[:, 2] - min_corner[2]) / span[2],
+            np.abs(points[:, 2] - max_corner[2]) / span[2],
+        ],
+        axis=1,
+    )
+    shell_mask = np.min(distance_to_bounds, axis=1) <= 0.13
+    shell_points = points[shell_mask]
+    if len(shell_points) < max(160, int(len(points) * 0.25)):
+        shell_points = points
+    target = max(280, min(3200, int(len(points) * 0.85)))
+    return _voxel_downsample_points(shell_points.astype(np.float32, copy=False), target_points=target)
 
 
 def _reconstruct_complex(points: np.ndarray, target_points: int = 4500) -> np.ndarray:
-    if len(points) <= target_points:
-        return points.astype(np.float32, copy=True)
-    indices = np.linspace(0, len(points) - 1, num=target_points, dtype=np.int64)
-    return points[indices].astype(np.float32, copy=False)
+    conservative_target = min(int(target_points), max(320, int(len(points) * 0.75)))
+    return _voxel_downsample_points(points.astype(np.float32, copy=False), target_points=conservative_target)
 
 
 def _run_surface_reconstructor_module(
@@ -2353,6 +2512,15 @@ def _run_surface_reconstructor_module(
             if not result:
                 continue
             mesh = result["mesh"]
+            try:
+                triangle_count = int(len(mesh.triangles))
+                if triangle_count > 180:
+                    target_triangles = max(120, int(triangle_count * 0.55))
+                    coarse_mesh = mesh.simplify_quadric_decimation(target_triangles)
+                    if len(coarse_mesh.vertices) > 0 and len(coarse_mesh.triangles) > 0:
+                        mesh = coarse_mesh
+            except Exception:
+                pass
             mesh_path = output_dir / f"class_{int(class_id):02d}_{result['type']}_mesh.ply"
             module.o3d.io.write_triangle_mesh(str(mesh_path), mesh)
             generated_files.append(str(mesh_path))
@@ -2360,7 +2528,7 @@ def _run_surface_reconstructor_module(
                 {
                     "part_label": int(class_id),
                     "surface_type": str(result["type"]),
-                    "triangle_count": int(result.get("triangles", 0)),
+                    "triangle_count": int(len(mesh.triangles)),
                     "point_count": int(len(class_points)),
                 }
             )
@@ -2382,7 +2550,7 @@ def _run_surface_reconstructor_module(
             combined_points=combined_points,
             generated_files=generated_files,
             part_summaries=part_summaries,
-            notes=[],
+            notes=["Conservative mesh decimation is enabled."],
         )
     finally:
         temp_path.unlink(missing_ok=True)
@@ -2471,5 +2639,5 @@ def reconstruct_object_surfaces(
         combined_points=combined_points,
         generated_files=generated_files,
         part_summaries=part_summaries,
-        notes=notes,
+        notes=["Conservative reconstruction mode: reduced extrapolation.", *notes],
     )
