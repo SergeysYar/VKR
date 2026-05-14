@@ -283,7 +283,7 @@ with st.sidebar:
         value=str(DEFAULT_SEGMENTATION_WEIGHTS_DIR),
     )
 
-st.markdown("## Демо-режим идеальной работы")
+st.markdown("## Демо-режим")
 demo_mode_enabled = st.checkbox("Включить демо-режим", value=False, key="demo_mode_enabled")
 
 if demo_mode_enabled:
@@ -321,7 +321,7 @@ if demo_mode_enabled:
         key="demo_clear_prev",
     )
 
-    if st.button("Запустить демо-сценарий 'идеальная работа'"):
+    if st.button("Запустить демо-сценарий"):
         try:
             demo_path_clean = _resolve_file_input(
                 path_value=demo_cloud_path,
