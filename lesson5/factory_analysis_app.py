@@ -475,6 +475,8 @@ if demo_mode_enabled:
                 ),
                 use_container_width=True,
             )
+    st.info("Демо-режим активен: блоки ручного анализа скрыты. Выключите флажок демо-режима для возврата.")
+    st.stop()
 else:
     st.session_state.pop("demo_mode_state", None)
 
